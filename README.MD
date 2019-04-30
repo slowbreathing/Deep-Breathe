@@ -1,4 +1,8 @@
+# DEEP-Breathe
+
+# Introduction
 I feel that the barrier to entry for Deep Learning is very steep. Especially the models which are required for Natural Language Processing. Neural Machine Translation for example, uses concepts like LSTM, Bidirectional LSTM, Multi Layered LSTMs, Attention etc. Neither one of them is easy to understand by itself, imagine the plight of a student when these concepts are strung together for a Neural Machine Translation Based systems. I have seen Neural Machine Translation Based systems grossly underperform and, it was simply because most of the hyperparameters were not understood at all. Deep-Breathe is a complete and pure python implementation of these models. In Fact the scripts have been written to compare weights after a certain number of iterations between TF implementation and the Deep-Breathe one. Hopefully this will go a long way into lowering the barrier to entry
+
 
 mkdir resources/tmp/rnn_words
 python org/mk/training/dl/LSTMAllByitself/LSTMMain.py input/belling_the_cat10.txt
