@@ -7,11 +7,12 @@ I feel that the barrier to entry for Deep Learning is very steep. Especially the
 1. tensorflow(only for comparisons)
 2. python 3.5 or above
 3. numpy.
+4. The pair of scripts, first is the TF implementation and second being pure python one.
 
 
+#scripts
 
 mkdir resources/tmp/rnn_words
-python org/mk/training/dl/LSTMAllByitself/LSTMMain.py input/belling_the_cat10.txt
 
 python org/mk/training/dl/tfwordslstmsingle.py
 python -m org.mk.training.dl.LSTMMainsingle
