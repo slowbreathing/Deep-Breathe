@@ -1,24 +1,4 @@
-#Karpathy's heavily redesigned
-./DL/RNN/manualRNNkarpathy.py input/alice.txt (Not changed at all)
-./DL/RNN/manualRNNreversekarpathy.py input/input.txt
-./DL/RNN/RNNMain.py input/input.txt
-
-#tensorflow implementation reverse engineered
-./DL/RNN/tfmanualRNNDataGen.py
-./DL/RNN/tfmanualRNNBatchDataGen.py
-./DL/RNN/tfmanualRNNEpochBatchDataGen.py
-./DL/RNN/tfreversemanualRNN.py
-./DL/RNN/RNNMain2.py
-
-# Change the below value 
-# num_steps = 1 # number of truncated backprop steps ('n' in the discussion above)
-# state_size = 4
-# num_steps = 5 # number of truncated backprop steps ('n' in the discussion above)
-# state_size = 4
-# num_steps = 10 # number of truncated backprop steps ('n' in the discussion above)
-# state_size = 16
-./DL/RNN/sequenceCatchertf.py(Not changed at all)
-./DL/RNN/sequenceCatcherManual.py
+I feel that the barrier to entry for Deep Learning is very steep. Especially the models which are required for Natural Language Processing. Neural Machine Translation for example, uses concepts like LSTM, Bidirectional LSTM, Multi Layered LSTMs, Attention etc. Neither one of them is easy to understand by itself, imagine the plight of a student when these concepts are strung together for a Neural Machine Translation Based systems. I have seen Neural Machine Translation Based systems grossly underperform and, it was simply because most of the hyperparameters were not understood at all. Deep-Breathe is a complete and pure python implementation of these models. In Fact the scripts have been written to compare weights after a certain number of iterations between TF implementation and the Deep-Breathe one. Hopefully this will go a long way into lowering the barrier to entry
 
 mkdir resources/tmp/rnn_words
 python org/mk/training/dl/LSTMAllByitself/LSTMMain.py input/belling_the_cat10.txt
@@ -70,5 +50,3 @@ python -m org.mk.training.dl.manualmachinetranslationcurr --attention_architectu
 
 python -m org.mk.training.dl.tfmachinetranslationcurr
 python -m org.mk.training.dl.manualmachinetranslationcurr
-
-
