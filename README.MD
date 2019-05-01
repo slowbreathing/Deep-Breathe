@@ -10,7 +10,7 @@ I feel that the barrier to entry for Deep Learning is very steep. Especially the
 4. The pair of scripts, first is the TF implementation and second being pure python one.
 
 
-#scripts
+##scripts
 
 mkdir resources/tmp/rnn_words
 
