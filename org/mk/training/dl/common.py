@@ -16,11 +16,11 @@ def loss(pred,labels):
 def softmax(logits):
     """row represents num classes but they may be real numbers
     So the shape of input is important
-    ([[1,2,3],
-      [1,2,5]]
+    ([[1, 3, 5, 7],
+      [1,-9, 4, 8]]
     softmax will be for each of the 2 rows
-    [[0.09003057 0.24472847 0.66524096]
-    [0.01714783 0.04661262 0.93623955]]
+    [[2.14400878e-03 1.58422012e-02 1.17058913e-01 8.64954877e-01]
+    [8.94679461e-04 4.06183847e-08 1.79701173e-02 9.81135163e-01]]
     respectively
     But if the input is Tranposed clearly the answer will be wrong.
 
@@ -54,16 +54,8 @@ def softmax_grad(scoret,dalignments):
     dscore=np.zeros_like(dalignments)
     for i in range(batch):
         checkdatadim(scoret[i],2)
-            #decseq,size=s.shape
-            #smg=np.zeros((decseq,size))
-            #for i in range(decseq):
-        #print("row:",s[i].T,s[i].T.shape)
-        #row=np.squeeze(s[i].T,axis=0)
         score=np.squeeze(scoret[i],axis=0)
-        #print("row:",score)
-        #print("dalignments:",dalignments.shape)
         dscore[i]=np.dot(dalignments[None,i,:,:],_softmax_grad(score))
-        #if(row.)
     return dscore
 
 """
@@ -79,23 +71,47 @@ def batch_multiply(x,y):
 """
 
 
-def _softmax_grad(s):
+def _softmax_grad(sm):
     # Take the derivative of softmax element w.r.t the each logit which is usually Wi * X
     # input s is softmax value of the original input x.
-    # s.shape = (1, n)
-    # i.e. s = np.array([0.3, 0.7]), x = np.array([0, 1])
+    # [2.14400878e-03 1.58422012e-02 1.17058913e-01 8.64954877e-01]
     # initialize the 2-D jacobian matrix.
-    jacobian_m = np.diag(s)
+    jacobian_m = np.diag(sm)
     #print("jacobian_m:",jacobian_m)
     for i in range(len(jacobian_m)):
         for j in range(len(jacobian_m)):
             if i == j:
-                #print("equal:",i,j)
-                jacobian_m[i][j] = s[i] * (1-s[i])
+                print("equal:",i, sm[i],(1-sm[i]))
+                #equal: 0 0.002144008783584634 0.9978559912164153
+                #equal: 1 0.015842201178506925 0.9841577988214931
+                #equal: 2 0.11705891323853292 0.8829410867614671
+                #equal: 3 0.8649548767993754 0.13504512320062456
+                jacobian_m[i][j] = sm[i] * (1-sm[i])
             else:
-                #print("not equal:",i,j)
-                jacobian_m[i][j] = -s[i]*s[j]
-    #print("jacobian_m:",jacobian_m)
+                print("not equal:",i,j,sm[i],sm[j])
+                #not equal: 0 1 0.002144008783584634 0.015842201178506925
+                #not equal: 0 2 0.002144008783584634 0.11705891323853292
+                #not equal: 0 3 0.002144008783584634 0.8649548767993754
+
+                #not equal: 1 0 0.015842201178506925 0.002144008783584634
+                #not equal: 1 2 0.015842201178506925 0.11705891323853292
+                #not equal: 1 3 0.015842201178506925 0.8649548767993754
+
+                #not equal: 2 0 0.11705891323853292 0.002144008783584634
+                #not equal: 2 1 0.11705891323853292 0.015842201178506925
+                #not equal: 2 3 0.11705891323853292 0.8649548767993754
+
+                #not equal: 3 0 0.8649548767993754 0.002144008783584634
+                #not equal: 3 1 0.8649548767993754 0.015842201178506925
+                #not equal: 3 2 0.8649548767993754 0.11705891323853292
+                jacobian_m[i][j] = -sm[i]*sm[j]
+
+    #finally resulting in
+    #[[ 2.13941201e-03 -3.39658185e-05 -2.50975338e-04 -1.85447085e-03]
+    #[-3.39658185e-05  1.55912258e-02 -1.85447085e-03 -1.37027892e-02]
+    #[-2.50975338e-04 -1.85447085e-03  1.03356124e-01 -1.01250678e-01]
+    #[-1.85447085e-03 -1.37027892e-02 -1.01250678e-01  1.16807938e-01]]
+
     return jacobian_m
 
 def cross_entropy_loss(pred,labels):
