@@ -116,17 +116,6 @@ while step < training_iters:
     symbols_in_keys = np.reshape(np.array(symbols_in_keys), [-1, n_input, vocab_size])
     print("symbols_in_keys:",symbols_in_keys)
     target=dictionary[str(train_data[offset + n_input])]
-    """with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
-        cell = LSTMCell(n_hidden,debug=True)
-
-    result, state = dynamic_rnn(cell, symbols_in_keys)
-    (c, h) = state.c,state.h
-    print("final:", repr(result),state,h.shape)
-
-    #last layer of Feed Forward to compare to transform result to the shape of target
-    out_l = Dense(10,kernel_initializer=init_ops.Constant(out_weights),bias_initializer=init_ops.Constant(out_biases))
-    pred=out_l(h)
-    print("pred:",pred)"""
 
     #cross_entropy_loss internally calculates the same softmax as and then the loss as above but for a batch and sequence
     #pred- batch,seq,input_size
