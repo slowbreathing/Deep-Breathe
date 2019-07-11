@@ -10,7 +10,7 @@ from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import init_ops
 from tensorflow.contrib.rnn import GRUCell
 from org.mk.training.dl.common import input_one_hot
-
+from org.mk.training.dl.util import get_rel_save_file
 
 import sys
 # data I/O
@@ -21,7 +21,7 @@ data = open(train_file, 'r').read()
 # Parameters
 learning_rate = 0.001
 #training_iters = 50000
-training_iters = 2
+training_iters = 200
 display_step = 100
 n_input = 3
 
@@ -125,6 +125,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 global_step = tf.Variable(0, name='global_step', trainable=False)
 # Initializing the variables
 init = tf.global_variables_initializer()
+projectdir="rnn_words"
 
 start_time = time.time()
 def elapsed(sec):
@@ -172,7 +173,7 @@ with tf.Session() as session:
             symbols_out = train_data[offset + n_input]
             symbols_out_pred = reverse_dictionary[int(tf.argmax(onehot_pred, 1).eval())]
             saver.save(session,
-				   "resources/tmp/rnn_words/lstminitstate/"+"model-checkpoint-" + '%04d' % (step+1), global_step=global_step)
+				   get_rel_save_file(projectdir)+ '%04d' % (step+1), global_step=global_step)
             print("%s - Actual word:[%s] vs Predicted word:[%s]" % (symbols_in,symbols_out,symbols_out_pred))
         step += 1
         offset += (n_input+1)

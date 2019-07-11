@@ -15,8 +15,6 @@ class BatchGradientDescent(object):
         l.yhat=yhat
 
         l.target=target
-        #print("layer:",l.target,l.yhat)
-        #print("layer:",l)
         grad=ec.compute_gradients()
         ec.clean()
         return grad
@@ -57,16 +55,12 @@ class BatchGradientDescent(object):
         """
         for layer in gradients:
             name,grad=layer
-            #print("layer:",name)
             if(grad is not None):
                 for key in grad.keys():
-                    #print("key:",key)
                     val=grad[key]
-                    #keys represent one of 'Y' 'fw_cell' etc.
                     for i in range(len(val)):
                         item=val[i]
 
-                        #in case of LSTM cells, each of the items represent a FeedForwardCell
                         ds,ws=zip(*item)
                         self._apply(ds,ws)
     def _apply(self,ds,ws):

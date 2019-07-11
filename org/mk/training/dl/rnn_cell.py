@@ -18,6 +18,10 @@ from org.mk.training.dl.common import checkdatadim
 from org.mk.training.dl.common import checktupledim
 from org.mk.training.dl.common import checkarrayshape
 from org.mk.training.dl.common import change_internal_state_type
+from org.mk.training.dl.common import retrieve_name
+from org.mk.training.dl.nn import TrainableVariable
+
+
 class LSTMCell(Cell):
     # initialise the Recurrent Neural Network
     def __init__(self, hidden_size, forget_bias=1, debug=False):
@@ -32,9 +36,11 @@ class LSTMCell(Cell):
         else:
             self.init_function=WeightsInitializer.initializer
 
-        self.shape=None
-        self.WLSTM=None
 
+        self.shape=None
+
+        #self.WLSTM=None
+        self.lstmname=None
         self.wf = None
         self.wi = None
         self.wc = None
@@ -69,6 +75,25 @@ class LSTMCell(Cell):
         self.seqmax=seq
         self.shape=(4 * self.hidden_size, self.input_size + self.hidden_size + 1)
 
+
+        if self.lstmname is None:
+            self.lstmname=str(retrieve_name(self))
+        WLSTM=TrainableVariable.getInstance(self.lstmname)
+        if WLSTM is None:
+            WLSTM=TrainableVariable.getInstance(self.lstmname,self.init_function(self.shape)).value
+        else:
+            WLSTM=TrainableVariable.getInstance(self.lstmname).value
+        self.wf = WLSTM[0:self.hidden_size, 1:]
+        self.wi = WLSTM[self.hidden_size:self.hidden_size * 2, 1:]
+        self.wc = WLSTM[self.hidden_size * 2:self.hidden_size * 3, 1:]
+        self.wo = WLSTM[self.hidden_size * 3:self.hidden_size * 4, 1:]
+
+        self.bf = WLSTM[0:self.hidden_size, 0].reshape(self.hidden_size, 1)
+        self.bi = WLSTM[self.hidden_size:self.hidden_size * 2, 0].reshape(self.hidden_size, 1)
+        self.bc = WLSTM[self.hidden_size * 2:self.hidden_size * 3, 0].reshape(self.hidden_size, 1)
+        self.bo = WLSTM[self.hidden_size * 3:self.hidden_size * 4, 0].reshape(self.hidden_size, 1)
+
+        """
         self.WLSTM=self.init_function(self.shape)
         self.wf = self.WLSTM[0:self.hidden_size, 1:]
         self.wi = self.WLSTM[self.hidden_size:self.hidden_size * 2, 1:]
@@ -79,7 +104,7 @@ class LSTMCell(Cell):
         self.bi = self.WLSTM[self.hidden_size:self.hidden_size * 2, 0].reshape(self.hidden_size, 1)
         self.bc = self.WLSTM[self.hidden_size * 2:self.hidden_size * 3, 0].reshape(self.hidden_size, 1)
         self.bo = self.WLSTM[self.hidden_size * 3:self.hidden_size * 4, 0].reshape(self.hidden_size, 1)
-
+        """
         self.dwi = np.zeros_like(self.wi)
         self.dwc = np.zeros_like(self.wc)
         self.dwo = np.zeros_like(self.wo)
@@ -107,8 +132,9 @@ class LSTMCell(Cell):
             print(
                 "_setinitparams start*******************************************************************************************************")
             print("cell:", self)
-            print("self.weights shape:", self.WLSTM.shape)
-            print("self.weights:", self.WLSTM)
+            print("self.lstmname:", self.lstmname)
+            print("self.weights shape:", WLSTM.shape)
+            print("self.weights:", WLSTM)
             print("self.hidden_size:", self.hidden_size)
             print("self.input_size:", self.input_size)
             print("self.init:", self.init)
@@ -162,7 +188,6 @@ class LSTMCell(Cell):
         #sanity checks
         checkdatadim(X,2)
         if(state is not None):
-            #print("isinstance(state, LSTMStateTuple):",isinstance(state, LSTMStateTuple),type(state),type(state.c))
             if (isinstance(state, LSTMStateTuple)):
                 state=change_internal_state_type(state)
             checktupledim(state,2)
@@ -179,10 +204,10 @@ class LSTMCell(Cell):
         self.ct[-1] = self.c
         if(self.Xfacing and self.gen_X_Ds):
             self.xt[self.seqsize]=X
-        #print("Xh:",X.shape,self.h.shape)
         z = np.concatenate((X,self.h), 0)
-        #print("Xh:",X.shape,self.h.shape,z.shape)
-        fico = np.dot(self.WLSTM[:, 1:], z) + self.WLSTM[:, 0].reshape(self.hidden_size * 4, 1)
+        WLSTM=TrainableVariable.getInstance(self.lstmname).value
+
+        fico = np.dot(WLSTM[:, 1:], z) + WLSTM[:, 0].reshape(self.hidden_size * 4, 1)
         f = self.sigmoid_array(fico[0:self.hidden_size, :] + self.forget_bias)
         i = self.sigmoid_array(fico[self.hidden_size * 1:self.hidden_size * 2, :])
         cproj = self.tanh_array(fico[self.hidden_size * 2:self.hidden_size * 3, :])
@@ -222,8 +247,6 @@ class LSTMCell(Cell):
         """
         self.ct, self.cprojt, self.coldt, self.ft, self.it, self.ot, self.zt, self.xt = {}, {}, {}, {}, {}, {}, {}, {}
         self.seqmax=seqmax
-
-
         self.seqsize=0
 
 
@@ -265,19 +288,20 @@ class LSTMCell(Cell):
 
         self.dwf += np.dot(dft, z)
         self.dbf += dft.sum(1,keepdims=True)
-        dxf = np.dot(dft.T, self.WLSTM[0:self.hidden_size, 1:])
+        WLSTM=TrainableVariable.getInstance(self.lstmname).value
+        dxf = np.dot(dft.T, WLSTM[0:self.hidden_size, 1:])
 
         self.dwi += np.dot(dit, z)
         self.dbi += dit.sum(1,keepdims=True)
-        dxi = np.dot(dit.T, self.WLSTM[self.hidden_size * 1:self.hidden_size * 2, 1:])
+        dxi = np.dot(dit.T, WLSTM[self.hidden_size * 1:self.hidden_size * 2, 1:])
 
         self.dwc += np.dot(dcproj, z)
         self.dbc += dcproj.sum(1,keepdims=True)
-        dxc = np.dot(dcproj.T, self.WLSTM[self.hidden_size * 2:self.hidden_size * 3, 1:])
+        dxc = np.dot(dcproj.T, WLSTM[self.hidden_size * 2:self.hidden_size * 3, 1:])
 
         self.dwo += np.dot(dot, z)
         self.dbo += dot.sum(1,keepdims=True)
-        dxo = np.dot(dot.T, self.WLSTM[self.hidden_size * 3:self.hidden_size * 4, 1:])
+        dxo = np.dot(dot.T, WLSTM[self.hidden_size * 3:self.hidden_size * 4, 1:])
 
         dx = dxf + dxi + dxc + dxo
         xcomp=dx[:, :self.input_size]

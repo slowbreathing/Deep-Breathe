@@ -10,7 +10,7 @@ from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import init_ops
 from tensorflow.contrib.rnn import GRUCell
 from org.mk.training.dl.common import input_one_hot
-
+from org.mk.training.dl.util import get_rel_save_file
 
 import sys
 # data I/O
@@ -21,7 +21,7 @@ data = open(train_file, 'r').read()
 # Parameters
 learning_rate = 0.001
 #training_iters = 50000
-training_iters = 2
+training_iters = 200
 display_step = 100
 n_input = 3
 
@@ -83,7 +83,8 @@ biases = {
 def RNN(x, weights, biases):
     with variable_scope.variable_scope(
             "other", initializer=init_ops.constant_initializer(0.1)) as vs:
-        cell = rnn.MultiRNNCell([rnn_cell.LayerNormBasicLSTMCell(n_hidden, layer_norm=False),rnn_cell.LayerNormBasicLSTMCell(n_hidden, layer_norm=False)])
+        cell = rnn.MultiRNNCell([rnn_cell.LayerNormBasicLSTMCell(n_hidden, layer_norm=False),
+                                 rnn_cell.LayerNormBasicLSTMCell(n_hidden, layer_norm=False)])
         outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
         return tf.expand_dims(tf.matmul(outputs[-1], weights['out'])[-1],0) + biases['out'],outputs[-1],states,weights['out'],biases['out']
 
@@ -102,6 +103,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 global_step = tf.Variable(0, name='global_step', trainable=False)
 # Initializing the variables
 init = tf.global_variables_initializer()
+projectdir="rnn_words"
 
 start_time = time.time()
 def elapsed(sec):
@@ -149,7 +151,7 @@ with tf.Session() as session:
             symbols_out = train_data[offset + n_input]
             symbols_out_pred = reverse_dictionary[int(tf.argmax(onehot_pred, 1).eval())]
             saver.save(session,
-				   "resources/tmp/rnn_words/lstmmulti/"+"model-checkpoint-" + '%04d' % (step+1), global_step=global_step)
+				   get_rel_save_file(projectdir)+ '%04d' % (step+1), global_step=global_step)
             print("%s - Actual word:[%s] vs Predicted word:[%s]" % (symbols_in,symbols_out,symbols_out_pred))
         step += 1
         offset += (n_input+1)

@@ -9,6 +9,7 @@ def parse_arguments():
     parser.add_argument("--src",help="Source file",default="input/NMT/train_fr_lines2.txt") 	# naming it "echo"
     parser.add_argument("--tgt", help="target file",default="input/NMT/train_en_lines2.txt")
     parser.add_argument("--vocab", help="vocab file",default="resources/tmp/embeddings/glove.6B.50d.txt")
+    parser.add_argument("--dim_len", help="dim len from vocab file",default=51)
     parser.add_argument("--num_layers",type=int, help="RNN feed forward layer",default=2) 	# naming it "echo"
     parser.add_argument("--encoder_type", help="Uni or bi directional encoder",default="bi")
     parser.add_argument("--num_units",type=int, help="hidden units",default=5)
@@ -17,6 +18,8 @@ def parse_arguments():
     parser.add_argument("--epochs",type=int, help="rounds of training",default=1)
     parser.add_argument("--per_epoch",type=int, help="rounds of training",default=1)
     parser.add_argument("--debug",type=bool, help="debug output",default=False)
+    #parser.add_argument("--iterations",type=int, help="rounds of training",default=2)
+    parser.add_argument("--display_steps",type=int, help="debug output",default=1)
     parser.add_argument("--out_dir",help="output folder",default="resources/tmp/nmt-models/fresh/")
 
     parser.add_argument("--attention_architecture",help="attention or not",default=None)

@@ -65,7 +65,7 @@ class ExecutionContext(object):
         for i,item in enumerate(reversed(self.layers)):
             #print("item.yhat:",item.yhat)
             grad=item.compute_gradient()
-            print("compute_gradient():",type(item),item.name)
+            #print("compute_gradient():",type(item),item.name)
 
             if(grad is not None):
                 if(item.name is None):

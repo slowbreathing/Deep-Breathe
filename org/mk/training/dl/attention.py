@@ -35,22 +35,13 @@ def _prepare_memory(memory, memory_sequence_length):
     return memory
 
 def _luong_score(query, keys, scale):
-
-
     """"""
-    #print("keys.shape:",keys.shape," query.shape:",query.T.shape)
-
-    #score=np.dot(keys,query.T)
-    #score = np.squeeze(score, [0])
     bat,seq,size=keys.shape
     score=np.zeros((bat,seq,1))
 
     for i in range(bat):
-        #print("keys[i,:,:]",keys[i]," query:",query[None ,i,:].T.shape)
         x=np.dot(keys[i,:,:],query[None ,i,:].T)
-        #print("score[i]",x)
         score[i]=x
-    #print("score.shape:",score.shape)
     return score
 
 class AttentionWrapper(object):
@@ -64,9 +55,11 @@ class AttentionWrapper(object):
                  output_attention=True,
                  initial_cell_state=None,
                  name=None,
-                 attention_layer=None):
+                 attention_layer=None,
+                 debug=False):
         self.seqsize=0
         self.ec=ExecutionContext.getInstance()
+        self.debug=debug
         if issubclass(type(cell), MultiRNNCell):
             """"""
         else:
@@ -101,7 +94,7 @@ class AttentionWrapper(object):
 
     @property
     def attention_layer_dense_shape(self):
-        return self._attention_layer.dense_kernel_shape
+        return self._attention_layer.kernel_shape
 
     @property
     def attention_layer_dense(self):
@@ -137,12 +130,10 @@ class AttentionWrapper(object):
             raise TypeError("Expected state to be instance of AttentionWrapperState. "
                       "Received type %s instead."  % type(state))
         X=np.concatenate((X,state.attention.T),0)
-        #print("X.shape:",X.shape)
         new_op,new_st=self._cell(X,state.cell_state)
-        print("new_op:",new_op, " new_st:",new_st)
-        #new_op=_item_or_tuple(new_op)
+        if (self.debug):
+            print("new_op:",new_op, " new_st:",new_st)
         new_op=_item_or_lastitem(new_op)
-        #print("LSTM.new_op:",repr(new_op))
         attention,alignments,next_atten,attenz=_compute_attention(self._attention_mechanism,new_op,state.cell_state,self._attention_layer)
         newaatn_st=AttentionWrapperState(cell_state=new_st,time=0,attention=attention,alignments=alignments,attention_state=next_atten,alignment_history="")
         self.aht[self.seqsize] = new_op
@@ -150,10 +141,9 @@ class AttentionWrapper(object):
         self.attentiont[self.seqsize] =attention
         self.alignmentst[self.seqsize] =alignments
         self.seqsize+=1
-        #print("self.seqsize:",self.seqsize,self.attentiont)
-        #print("self.seqsize:",self.seqsize,self.aht)
         attenlist=[]
-
+        if(self.debug):
+                print("New State:",newaatn_st)
         if self._output_attention:
             attenlist.append(attention)
             return attenlist, newaatn_st
@@ -169,15 +159,19 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
     """Computes the attention and alignments for a given attention_mechanism."""
     alignments, next_attention_state = attention_mechanism(
       cell_output, state=attention_state)
+
+
     context=np.zeros((attention_mechanism._batch_size,1,attention_mechanism._state_size))
-    #context=np.dot(alignments, attention_mechanism.values)
     for i in range(attention_mechanism._batch_size):
         context[i]=np.dot(alignments[i],attention_mechanism.values[i])
+        if(attention_mechanism.debug):
+            print("ContextVector:",context[i])
     context=np.squeeze(context,1)
     attenz=np.concatenate([cell_output, context], 1)
     if attention_layer is not None:
         attention = attention_layer(attenz)
-        #print("attention:",attention)
+        if(attention_mechanism.debug):
+            print("AttentionNew:",attention)
     else:
         attention = context
     return attention,alignments,next_attention_state,attenz
@@ -192,8 +186,9 @@ class BaseAttentionMechanism(object):
                memory_layer=None,
                check_inner_dims_defined=True,
                score_mask_value=None,
-               name=None):
-
+               name=None,
+               debug=False):
+        self.debug=debug
         self._query_layer = query_layer
         self._memory_layer = memory_layer
         #print("memory:",memory)
@@ -202,7 +197,7 @@ class BaseAttentionMechanism(object):
             memory=np.concatenate((memory[0],memory[1]),axis=-1)
             self.encoderisbi=True
         bat,seq,size=memory.shape
-        print("memory.shape:",memory.shape)
+        #print("memory.shape:",memory.shape)
         self._batch_size=bat
         self._seq_size=seq
         self._state_size=size
@@ -226,7 +221,7 @@ class BaseAttentionMechanism(object):
 
     @property
     def memory_layer_dense_shape(self):
-        return self._memory_layer.dense_kernel_shape
+        return self._memory_layer.kernel_shape
 
 
     def __repr__(self):
@@ -238,7 +233,6 @@ class LuongAttention(BaseAttentionMechanism):
         if probablity_fn is None:
           probablity_fn = softmax
         wrapped_probability_fn = lambda score: probablity_fn(score)
-        #print("memory:",memory)
         super(LuongAttention, self).__init__(
             query_layer=None,
             memory_layer=Dense(num_units, name="memory_layer", use_bias=False,trainable=False),
@@ -247,28 +241,28 @@ class LuongAttention(BaseAttentionMechanism):
             memory_sequence_length=memory_sequence_length,
             score_mask_value=score_mask_value,
             name=name)
+
+        if(self.debug):
+            print(self)
         self._num_units = num_units
         self._scale = scale
         self._name = name
-        print("self._values.shape:",self._values.shape," self._keys.shape:",self._keys.shape)
+
     def __repr__(self):
-            return "LuongAttention("+str(self.__dict__)+")"
+            #return "LuongAttention("+str(self.__dict__)+")"
+            return "LuongAttention("+str("_values:")+str(self._values)+str("\n_memory_layer:")+str(self._memory_layer)+str("\n_keys:")+str(self._keys)+")"
 
     def __call__(self,query,state):
         """"""
-        #print("query:",query,query.shape)
         score=_luong_score(query,self._keys,False)
-        #print("score:",score,score.shape)
+        if(self.debug):
+            print("Score:",score)
         alignments=np.zeros((self._batch_size,1,self._seq_size))
         for i in range(self._batch_size):
-            #print("score[i].T:",score[i].T)
             sm=self._probability_fn(score[i].T)
-            #print("self._probability_fn(score[i].T):",sm)
+            if(self.debug):
+                print("ScoreSoftmaxed:",sm)
             alignments[i]=sm
-        #print("alignments:",alignments,alignments.shape)
-        #alignments=np.squeeze(alignments,0).T
-        #print("alignments:",alignments)
-
         next_state=alignments
         return alignments,next_state
 
@@ -333,7 +327,7 @@ def compute_gradient(attentionlayer):
 
     damvalues=np.zeros_like(attention_mechanism.values)
 
-    print("fw_cell.seqsize:",fw_cell.seqsize)
+    #print("fw_cell.seqsize:",fw_cell.seqsize)
     dattention_recur=np.zeros_like(dattention)
     for seqnum in reversed(range(fw_cell.seqsize )):
         dWyfw+=np.dot(fullattention[seqnum,:,:].T,np.reshape(ycomp[:,seqnum,:],[batch,size]))
@@ -373,7 +367,7 @@ def compute_gradient(attentionlayer):
 
         for i in range(fw_cell.batch_size):
             #print("dkeys[i]:",dkeys[i].shape)
-            damvaluestemp=np.dot(dkeys[i],attention_mechanism.memory_layer_dense.dense_kernel.T)
+            damvaluestemp=np.dot(dkeys[i],attention_mechanism.memory_layer_dense.kernel.T)
             #damvaluestemp=np.dot(dkeys[i],attention_mechanism.memory_layer_dense.dense_kernel)
             damvalues[None,i]+=damvaluestemp
         #print("damvalues1:",damvalues,damvalues.shape)#," attention_mechanism.memory_layer_dense.dense_kernel:",attention_mechanism.memory_layer_dense.dense_kernel)
@@ -417,20 +411,20 @@ def compute_gradient(attentionlayer):
 
     memory_grad=[]
     avg_memory_grad=dmemory_layer/(batch*seq)
-    memory_grad.append(((avg_memory_grad,attention_mechanism.memory_layer_dense.dense_kernel),))
+    memory_grad.append(((avg_memory_grad,attention_mechanism.memory_layer_dense.kernel),))
     grads['memory_grad']=memory_grad
 
     attention_grad=[]
     avg_attention_grad=dattention_layer/(batch*seq)
-    attention_grad.append(((avg_attention_grad,attention_cell.attention_layer_dense.dense_kernel),))
+    attention_grad.append(((avg_attention_grad,attention_cell.attention_layer_dense.kernel),))
     #print("attention_grad:",attention_grad)
     grads['attention_grad']=attention_grad
 
-    print("attention_mechanism.encoderisbi:",attention_mechanism.encoderisbi)
+    #print("attention_mechanism.encoderisbi:",attention_mechanism.encoderisbi)
     if (attention_mechanism.encoderisbi):
         """"""
         damvaluestup=(damvalues[:,:,0:attention_cell.hidden_size],damvalues[:,:,attention_cell.hidden_size:])
-        print("damvaluestup:",damvalues.shape,damvalues[:,:,0:attention_cell.hidden_size].shape,damvalues[:,:,attention_cell.hidden_size:].shape)
+        #print("damvaluestup:",damvalues.shape,damvalues[:,:,0:attention_cell.hidden_size].shape,damvalues[:,:,attention_cell.hidden_size:].shape)
         #print("attention_cell.hidden_size",attention_cell.hidden_size," damvalues[:,:,0:attention_cell.hidden_size]:",damvalues[:,:,0:attention_cell.hidden_size].shape)
         attentionlayer.grad=damvaluestup
     else:

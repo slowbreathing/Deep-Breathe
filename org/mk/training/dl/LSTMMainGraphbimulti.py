@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
 import numpy as np
+
 from org.mk.training.dl.rnn_cell import LSTMCell
-from org.mk.training.dl.rnn import bidirectional_dynamic_rnn
+from org.mk.training.dl.rnn import dynamic_rnn
+#from org.mk.training.dl.rnn import compute_gradients
 from org.mk.training.dl.rnn import print_gradients
 from org.mk.training.dl.rnn import zero_state_initializer
 from org.mk.training.dl.rnn import LSTMStateTuple
-from org.mk.training.dl.rnn import MultiRNNCell
 
 from org.mk.training.dl.common import loss
 from org.mk.training.dl.common import softmax
@@ -16,10 +17,11 @@ from org.mk.training.dl.common import WeightsInitializer
 from org.mk.training.dl import init_ops
 from org.mk.training.dl.optimizer import BatchGradientDescent
 from org.mk.training.dl.core import Dense
+from org.mk.training.dl.rnn import MultiRNNCell
+from org.mk.training.dl.rnn import bidirectional_dynamic_rnn
 
 import sys
 import collections
-
 # data I/O
 
 train_file = sys.argv[1]
@@ -50,7 +52,6 @@ out_weights = np.array([[-0.09588283, -2.2044923 , -0.74828255,  0.14180686, -0.
 out_biases = np.array([[0.1458478, -0.3660951, -2.1647317, -1.9633691, -0.24532059,
                        0.14005205, -1.0961286, -0.43737876, 0.7028531, -1.8481724]]
                       )
-
 
 def read_data(fname):
     with open(fname) as f:
@@ -89,7 +90,6 @@ print("vocab_size", vocab_size)
 learning_rate = 0.001
 # training_iters = 50000
 training_iters = 200
-
 display_step = 100
 n_input = 3
 n_hidden = 5
@@ -102,19 +102,33 @@ end_offset = n_input + 1
 acc_total = 0
 loss_total = 0
 print("offset:", offset)
-
-with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
-    fw_cell1 = LSTMCell(n_hidden,debug=True)
-    fw_cell2 = LSTMCell(n_hidden,debug=True)
-    bw_cell1 = LSTMCell(n_hidden,debug=True)
-    bw_cell2 = LSTMCell(n_hidden,debug=True)
-
-fw_cell = MultiRNNCell([fw_cell1, fw_cell2])
-bw_cell = MultiRNNCell([bw_cell1, bw_cell2])
+n_layers=2
 
 gdo=BatchGradientDescent(learning_rate)
-out_l = Dense(vocab_size,kernel_initializer=init_ops.Constant(out_weights),bias_initializer=init_ops.Constant(out_biases))
 
+
+def RNN(x, weights, biases):
+    fw_cell_list=[]
+    bw_cell_list=[]
+    for i in range(n_layers):
+        with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
+            fw_cell_list.append(LSTMCell(n_hidden,debug=True))
+            bw_cell_list.append(LSTMCell(n_hidden,debug=True))
+    fw_cell=MultiRNNCell(fw_cell_list)
+    bw_cell=MultiRNNCell(bw_cell_list)
+    result, state = bidirectional_dynamic_rnn(fw_cell,bw_cell, symbols_in_keys)
+    "Dense in this case should be out of WeightsInitializer scope because we are passing constants"
+    out_l = Dense(10,kernel_initializer=init_ops.Constant(out_weights),bias_initializer=init_ops.Constant(out_biases))
+    fw_result,bw_result=result
+    h=np.concatenate((fw_result,bw_result),-1)
+    pred=out_l(h[0][-1].reshape(1,vocab_size))
+    print("pred:",pred)
+    return pred
+
+
+def LOSS(X,target):
+    pred=RNN(X,out_weights,out_biases)
+    return cross_entropy_loss(pred.reshape([1,1,vocab_size]),np.array([[target]]))
 
 while step < training_iters:
     if offset > (len(train_data) - end_offset):
@@ -122,28 +136,25 @@ while step < training_iters:
     print("offset:", offset)
     symbols_in_keys = [input_one_hot(dictionary[str(train_data[i])],vocab_size) for i in range(offset, offset + n_input)]
     symbols_in_keys = np.reshape(np.array(symbols_in_keys), [-1, n_input, vocab_size])
+    print("symbols_in_keys:",symbols_in_keys)
     target=dictionary[str(train_data[offset + n_input])]
+    """with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
+        cell = LSTMCell(n_hidden,debug=True)
 
-    #cell = LSTMCell(vocab_size, n_hidden, w=weights, debug=True)
-    result, state = bidirectional_dynamic_rnn(fw_cell,bw_cell, symbols_in_keys)
-    #(c, h) = state
-    print("finalresult:", result)
-    print("finalstate:",state)
-    fw_result,bw_result=result
-    print("fw_result:",fw_result)
-    print("bw_result:",bw_result)
-    #print(":",fw_result.shape)
-    print("cc:",np.concatenate((fw_result,bw_result),-1),":",np.concatenate((fw_result,bw_result),-1).shape)
-    #print("out_weights:",out_weights," out_biases:",out_biases)
-    h=np.concatenate((fw_result,bw_result),-1)
-    print("h:",h[0][-1])
-    pred=out_l(h[0][-1].reshape(1,vocab_size))
-    print("pred:",pred)
+    result, state = dynamic_rnn(cell, symbols_in_keys)
+    (c, h) = state.c,state.h
+    print("final:", repr(result),state,h.shape)
+
+    #last layer of Feed Forward to compare to transform result to the shape of target
+    out_l = Dense(10,kernel_initializer=init_ops.Constant(out_weights),bias_initializer=init_ops.Constant(out_biases))
+    pred=out_l(h)
+    print("pred:",pred)"""
 
     #cross_entropy_loss internally calculates the same softmax as and then the loss as above but for a batch and sequence
     #pred- batch,seq,input_size
     #labels-batch,seq(has to be transformed before comparision with preds(line-43).)
-    yhat,cel=cross_entropy_loss(pred.reshape([1,1,vocab_size]),np.array([[target]]))
+    #yhat,cel=cross_entropy_loss(pred.reshape([1,1,vocab_size]),np.array([[target]]))
+    yhat,cel=LOSS(symbols_in_keys,target)
     print("yhat:",yhat)
     print("CEL:",cel)
 
@@ -152,7 +163,6 @@ while step < training_iters:
     gradients=gdo.compute_gradients(yhat,np.array([[target]]))
     gdo.apply_gradients(gradients)
     print_gradients(gradients)
-
     step += 1
     offset += (n_input + 1)
 print("Optimization Finished!")

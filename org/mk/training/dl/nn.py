@@ -21,40 +21,48 @@ class EmbeddingLayer(object):
     def compute_gradient(self):
         return compute_gradient(self)
 
-class LookupTable(object):
-    def __init__(self,word_embeddings):
-        self.word_embeddings=word_embeddings
-        self.inputs=None
-        self.vocab_size,self.dims=self.word_embeddings.shape
-        self.embedding_layer=EmbeddingLayer(name="EmbeddingLayer",table=self)
-        self.embeddeding_input=[]
-        self.ec=ExecutionContext.getInstance()
-    def lookup(self,input_data):
-        self.ec.register(self.embedding_layer)
-        self.inputs=input_data
-        return lookup(input_data,self.word_embeddings,self.dims,self.embeddeding_input)
-
-    def clean(self):
-        """"""
-        self.ec.clean_current();
-        self.inputs=None
-        self.embeddeding_input=[]
+class TrainableVariable(object):
+    def __init__(self,variable):
+        self.value=variable
 
     def __repr__(self):
-        return "LookupTable("+str(self.__dict__)+")"
+        return "TrainableVariable("+str(self.__dict__)+")"
 
 
     lookupdict={}
 
     @staticmethod
     def getInstance(name,var=None):
-        if(name in LookupTable.lookupdict):
-            return LookupTable.lookupdict[name]
+        if(name in TrainableVariable.lookupdict):
+            return TrainableVariable.lookupdict[name]
 
         else:
-            lt=LookupTable(var)
-            LookupTable.lookupdict[name]=lt
-            return lt
+            if var is not None:
+                lt=TrainableVariable(var)
+                TrainableVariable.lookupdict[name]=lt
+                return lt
+            else:
+                return None
+
+class EmbeddingTable(TrainableVariable):
+    def __init__(self,word_embeddings):
+        super(EmbeddingTable, self).__init__(word_embeddings)
+        self.inputs=None
+        self.vocab_size,self.dims=self.value.shape
+        self.embedding_layer=EmbeddingLayer(name="EmbeddingLayer",table=self)
+        self.embeddeding_input=[]
+        self.ec=ExecutionContext.getInstance()
+    def lookup(self,input_data):
+        print("EmbeddingTable:")
+        self.ec.register(self.embedding_layer)
+        self.inputs=input_data
+        return lookup(input_data,self.value,self.dims,self.embeddeding_input)
+
+    def clean(self):
+        """"""
+        self.ec.clean_current();
+        self.inputs=None
+        self.embeddeding_input=[]
 
 
 def lookup(input_data,word_embeddings,dims,inputs_list=None):
@@ -71,8 +79,11 @@ def lookup(input_data,word_embeddings,dims,inputs_list=None):
 
 def embedding_lookup(input_word_embeddings, input_data):
     embedding_input=None
-    if (isinstance(input_word_embeddings,LookupTable)):
+    if (isinstance(input_word_embeddings,EmbeddingTable)):
         embedding_input=input_word_embeddings.lookup(input_data)
+    elif (isinstance(input_word_embeddings,TrainableVariable)):
+        table=EmbeddingTable(input_word_embeddings.value)
+        embedding_input=table.lookup(input_data)
     else:
         vocab_size,dims=input_word_embeddings.shape
         embedding_input=lookup(input_data,input_word_embeddings,dims)
@@ -120,4 +131,4 @@ def print_gradients(gradients):
                     item=xfwgrad[i]
                     ds,ws=zip(*item)
                     print(ds)
-                print("MATRIX:",LookupTable.getInstance("input_word_embedding").word_embeddings)
+                print("MATRIX:",TrainableVariable.getInstance("input_word_embedding").value)

@@ -12,6 +12,7 @@ from tensorflow.python.ops import init_ops
 from tensorflow.python.framework import dtypes
 from tensorflow.contrib import rnn
 from org.mk.training.dl.nmtdata import get_nmt_data
+from org.mk.training.dl.util import get_rel_save_file
 
 from org.mk.training.dl.nmt import parse_arguments
 
@@ -90,7 +91,7 @@ def encoding_layer(rnn_cell_size, sequence_len, n_layers, rnn_inputs, dropout_pr
         #with tf.variable_scope('encoding_l_{}'.format(l)):
     with variable_scope.variable_scope(
             "encoding_layer", initializer=init_ops.constant_initializer(0.1)) as vs:
-        if(encoder_type is "bi"):
+        if(encoder_type == "bi"):
             n_bi_layers=int(n_layers/2)
             rnn_fw = get_rnn_cell(rnn_cell_size, dropout_prob,n_bi_layers)
             rnn_bw = get_rnn_cell(rnn_cell_size, dropout_prob,n_bi_layers)
@@ -129,12 +130,28 @@ def encoding_layer(rnn_cell_size, sequence_len, n_layers, rnn_inputs, dropout_pr
                                                                           dtype=tf.float32)
         return encoding_output, encoding_state, rnn_inputs
 
-def training_decoding_layer(decoding_embed_input, en_len, decoding_cell, initial_state, op_layer,
-                            v_size, max_en_len):
+def create_attention(decoding_cell,encoding_op,encoding_st,fr_len):
+
+    if(args.attention_option is "Luong"):
+        print("Attention is all I need.")
+        attention_mechanism = tf.contrib.seq2seq.LuongAttention(hidden_size, encoding_op, fr_len)
+        decoding_cell =  AttentionWrapper(decoding_cell,attention_mechanism,hidden_size)
+        attention_zero_state = decoding_cell.zero_state(batch_size , tf.float32 )
+        attention_zero_state = attention_zero_state.clone(cell_state = encoding_st)
+        return decoding_cell,attention_zero_state
+
+
+def training_decoding_layer(decoding_embed_input, en_len, decoding_cell, encoding_op, encoding_st, op_layer,
+                            v_size, fr_len, max_en_len):
     with variable_scope.variable_scope(
             "decoder", initializer=init_ops.constant_initializer(0.1)) as vs:
+
+        print("args:",args)
+        if (args.attention_architecture is not None):
+            decoding_cell,encoding_st=create_attention(decoding_cell,encoding_op,encoding_st,fr_len)
+
         helper = TrainingHelper(inputs=decoding_embed_input, sequence_length=en_len, time_major=False)
-        dec = BasicDecoder(decoding_cell, helper, initial_state,op_layer )
+        dec = BasicDecoder(decoding_cell, helper, encoding_st, op_layer)
         logits, _, _ = dynamic_decode(dec, output_time_major=False, impute_finished=True,
                                       maximum_iterations=max_en_len)
         return logits
@@ -149,9 +166,11 @@ def decoding_layer(decoding_embed_inp, embeddings, encoding_op, encoding_st, v_s
         logits_tr = training_decoding_layer(decoding_embed_inp,
                                             en_len,
                                             decoding_cell,
+                                            encoding_op,
                                             encoding_st,
                                             out_l,
                                             v_size,
+                                            fr_len,
                                             max_en_len)
     return logits_tr
 
@@ -189,6 +208,7 @@ def pad_sentences(sentences_batch, word2int):
 
 
 def get_batches(en_text, fr_text, batch_size,fr_word2int,en_word2int):
+    #for batch_idx in range(0,1):
     for batch_idx in range(0, len(fr_text) // batch_size):
         start_idx = batch_idx * batch_size
         en_batch = en_text[start_idx:start_idx + batch_size]
@@ -221,10 +241,11 @@ lr = 0.0
 dr_prob = 0.75
 encoder_type=None
 per_epoch=0
-logs_path = '/tmp/models/'
+display_steps=0
+projectdir="nmt_custom"
 
 def set_modelparams(args):
-    global epochs,n_layers,encoder_type,hidden_size,batch_size,lr,rnn_fw,rnn_bw,decoding_cell,gdo,n_bi_layer,debug,per_epoch,logs_path
+    global epochs,n_layers,encoder_type,hidden_size,batch_size,lr,rnn_fw,rnn_bw,decoding_cell,gdo,n_bi_layer,debug,per_epoch,logs_path,display_steps,projectdir
     epochs=args.epochs
     n_layers=args.num_layers
     encoder_type=args.encoder_type
@@ -234,6 +255,15 @@ def set_modelparams(args):
     debug=args.debug
     per_epoch=args.per_epoch
     logs_path=args.out_dir
+    display_steps=args.display_steps
+    projectdir=str(projectdir+str("/batch:"+str(batch_size))+str("layer:"+str(n_layers))+str("state:"+str(hidden_size)))
+    if(args.encoder_type == "bi"):
+        projectdir=str(projectdir+"bi")
+    else:
+        projectdir=str(projectdir+"uni")
+    if (args.attention_architecture is not None):
+        projectdir=str(projectdir+str("attention-"+args.attention_option))
+
 
 fr_embeddings_matrix,en_embeddings_matrix,fr_word2int,en_word2int,fr_filtered,en_filtered,args=get_nmt_data()
 set_modelparams(args)
@@ -263,17 +293,24 @@ with train_graph.as_default():
         gradients = optimizer.compute_gradients(tr_cost)
         train_op = optimizer.apply_gradients(gradients)
         tf.summary.scalar("cost", tr_cost)
+
 print("Graph created.")
 
 en_train = en_filtered[0:30000]
 fr_train = fr_filtered[0:30000]
+print("fr_train:",len(fr_train))
 update_check = (len(fr_train) // batch_size // per_epoch) - 1
 print("update_check:", update_check)
-checkpoint = logs_path + 'best_so_far_model.ckpt'
+#checkpoint = logs_path + 'best_so_far_model.ckpt'
+summary_update_loss = []
+stop_early_max_count = 3
+
+
 with tf.Session(graph=train_graph) as sess:
-    tf_summary_writer = tf.summary.FileWriter(logs_path, graph=train_graph)
+    tf_summary_writer = tf.summary.FileWriter(get_rel_save_file(projectdir), graph=train_graph)
     merged_summary_op = tf.summary.merge_all()
     sess.run(tf.global_variables_initializer())
+
     for epoch_i in range(1, epochs + 1):
         update_loss = 0
         batch_loss = 0
@@ -290,15 +327,46 @@ with tf.Session(graph=train_graph) as sess:
                  fr_len: fr_text_len,
                  dropout_probs: dr_prob})
 
-            print("batch:", batch_i, "encoding_embed_inputtf:", encoding_embed_inputtf)
+            """print("epoch_i:",epoch_i,"batch:", batch_i, "encoding_embed_inputtf:", encoding_embed_inputtf)
             print("batch:", batch_i, ":lastch:", encoding_sttf)
             print("batch:", batch_i, ":decoding_inputtf:", decoding_inputtf)
             print("batch:", batch_i, ":decoding_embed_inputtf:", decoding_embed_inputtf)
             print("batch:", batch_i, ":decoding_embed_inputtf:", decoding_embed_inputtf.shape)
             print("batch:", batch_i, ":tr_logits:", logits_trtf)
-            print("batch:", batch_i, ":tr_logits:", logits_trtf.shape)
+            print("batch:", batch_i, ":tr_logits:", logits_trtf.shape)"""
             print("batch:", batch_i, ":loss:", loss)
-            print("batch:", batch_i, ":merged_summary_op:", merged_summary_op)
+            print("epoch_i:",epoch_i,"batch:", batch_i, ":merged_summary_op:", merged_summary_op)
             print("batch:", batch_i, ":gradients:", gradientstf)
-            #saver = tf.train.Saver()
-            #saver.save(sess, checkpoint)
+            batch_loss += loss
+            update_loss += loss
+            after = time.time()
+            batch_time = after - before
+            tf_summary_writer.add_summary(summary, epoch_i * batch_size + batch_i)
+            if batch_i % display_steps == 0 and batch_i > 0:
+                print('** Epoch {:>3}/{} Batch {:>4}/{} - Batch Loss: {:>6.3f}, seconds: {:>4.2f}'
+                      .format(epoch_i,
+                              epochs,
+                              batch_i,
+                              len(fr_filtered) // batch_size,
+                              batch_loss / display_steps,
+                              batch_time*display_steps))
+                batch_loss = 0
+
+            if batch_i % update_check == 0 and batch_i > 0:
+                print("Average loss:", round(update_loss/update_check,3))
+                summary_update_loss.append(update_loss)
+
+                if update_loss <= min(summary_update_loss):
+                    print('Saving model')
+                    stop_early_count = 0
+                    saver = tf.train.Saver()
+                    saver.save(sess,
+                        get_rel_save_file(projectdir)+ '%04d' % (batch_i))
+
+
+                else:
+                    print("No Improvement.")
+                    stop_early_count += 1
+                    if stop_early_count == stop_early_max_count:
+                        break
+                update_loss = 0

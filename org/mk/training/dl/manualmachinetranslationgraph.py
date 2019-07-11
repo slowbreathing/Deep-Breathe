@@ -87,8 +87,9 @@ def get_rnn_cell(rnn_cell_size, dropout_prob,n_layers,debug):
 
 
 def encoding_layer(rnn_cell_size, sequence_len, n_layers, rnn_inputs, dropout_prob):
-    if(encoder_type=="bi"):
-        encoding_output, encoding_state=bidirectional_dynamic_rnn(rnn_fw,rnn_bw, rnn_inputs)
+    if(encoder_type=="bi" and n_layers%2 == 0):
+        n_bi_layer=int(n_layers/2)
+        encoding_output, encoding_state=bidirectional_dynamic_rnn(get_rnn_cell(rnn_cell_size, dr_prob,n_bi_layer,debug),get_rnn_cell(rnn_cell_size, dr_prob,n_bi_layer,debug), rnn_inputs)
         print("encoding_state:",encoding_state)
         if(n_bi_layer > 1):
             #layers/2
@@ -126,18 +127,12 @@ def encoding_layer(rnn_cell_size, sequence_len, n_layers, rnn_inputs, dropout_pr
                'h': array([[0.13779658, 0.09631104, 0.11861721, 0.1393639 , 0.1393639 ]])})))
             """
     else:
-        encoding_output, encoding_state=dynamic_rnn(rnn_fw, rnn_inputs)
+        encoding_output, encoding_state=dynamic_rnn(get_rnn_cell(rnn_cell_size, dr_prob,n_layers,debug), rnn_inputs)
     return encoding_output, encoding_state
 
 def create_attention(decoding_cell,encoding_op,encoding_st,fr_len):
 
     if(args.attention_option is "Luong"):
-        print("Attention is all I need.fr_len:",fr_len,decoding_cell)
-        #print("encoding_op[0].shape:",encoding_op[0].shape,type(encoding_op),len(encoding_op))
-        #if(encoder_type=="bi"):
-
-        #encoding_op=np.concatenate((encoding_op[0],encoding_op[1]),axis=-1)
-        #encoding_op=encoding_op[0]+encoding_op[1]
         with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
             attention_mechanism = LuongAttention(hidden_size, encoding_op, fr_len)
             decoding_cell =  AttentionWrapper(decoding_cell,attention_mechanism,hidden_size)
@@ -150,12 +145,9 @@ def create_attention(decoding_cell,encoding_op,encoding_st,fr_len):
 def training_decoding_layer(decoding_embed_input, en_len, decoding_cell, encoding_op, encoding_st, op_layer,
                             v_size, fr_len, max_en_len):
 
-    #print("args:",args)
-    #print("args:",args.attention_architecture)
     if (args.attention_architecture is not None):
 
         decoding_cell,encoding_st=create_attention(decoding_cell,encoding_op,encoding_st,fr_len)
-    #print("encoding_st:",encoding_st)
     helper = TrainingHelper(inputs=decoding_embed_input, sequence_length=en_len, time_major=False)
     dec = BasicDecoder(decoding_cell, helper, encoding_st, op_layer)
     logits, _= dynamic_decode(dec, output_time_major=False, impute_finished=True,
@@ -165,9 +157,10 @@ def training_decoding_layer(decoding_embed_input, en_len, decoding_cell, encodin
 def decoding_layer(decoding_embed_inp, embeddings, encoding_op, encoding_st, v_size, fr_len,
                    en_len, max_en_len, rnn_cell_size, word2int, dropout_prob, batch_size, n_layers):
 
+    out_l = Dense(len(en_word2int) + 1,kernel_initializer=init_ops.Constant(init))
     logits_tr = training_decoding_layer(decoding_embed_inp,
                                             en_len,
-                                            decoding_cell,
+                                            get_rnn_cell(rnn_cell_size, dr_prob,n_layers,debug),
                                             encoding_op,
                                             encoding_st,
                                             out_l,
@@ -251,6 +244,8 @@ lr = 0.0
 dr_prob = 0.75
 encoder_type=None
 display_steps=0
+projectdir="nmt_custom"
+
 
 min_learning_rate = 0.0006
 display_step = 20
@@ -258,7 +253,7 @@ stop_early_count = 0
 stop_early_max_count = 3
 per_epoch = 1
 debug=False
-
+display_steps=0
 update_loss = 0
 batch_loss = 0
 summary_update_loss = []
@@ -267,22 +262,6 @@ summary_update_loss = []
 rnn_fw=None
 rnn_bw = None
 decoding_cell = None
-gdo=None
-
-def make_model():
-    global rnn_fw,rnn_bw,decoding_cell,gdo,n_bi_layer
-    if(encoder_type == "bi" and n_layers%2 == 0):
-        n_bi_layer=int(n_layers/2)
-        print(n_bi_layer,type(n_bi_layer))
-        rnn_fw = get_rnn_cell(hidden_size, dr_prob,n_bi_layer,debug)
-        rnn_bw = get_rnn_cell(hidden_size, dr_prob,n_bi_layer,debug)
-        decoding_cell = get_rnn_cell(hidden_size, dr_prob,n_layers,True)
-
-    else:
-        rnn_fw = get_rnn_cell(hidden_size, dr_prob,n_layers,debug)
-        decoding_cell = get_rnn_cell(hidden_size, dr_prob,n_layers,debug)
-
-    gdo=BatchGradientDescent(lr)
 
 def set_modelparams(args):
     global epochs,n_layers,encoder_type,hidden_size,batch_size,lr,rnn_fw,rnn_bw,decoding_cell,gdo,n_bi_layer,debug,per_epoch,logs_path,display_steps
@@ -299,14 +278,11 @@ def set_modelparams(args):
 
 fr_embeddings_matrix,en_embeddings_matrix,fr_word2int,en_word2int,fr_filtered,en_filtered,args=get_nmt_data()
 set_modelparams(args)
-make_model()
 
 en_train = en_filtered[0:30000]
 fr_train = fr_filtered[0:30000]
 update_check = (len(fr_train) // batch_size // per_epoch) - 1
-
-
-out_l = Dense(len(en_word2int) + 1,kernel_initializer=init_ops.Constant(init))
+#out_l = Dense(len(en_word2int) + 1,kernel_initializer=init_ops.Constant(init))
 for epoch_i in range(1, epochs + 1):
     update_loss = 0
     batch_loss = 0
@@ -321,6 +297,7 @@ for epoch_i in range(1, epochs + 1):
         #print("batch:", batch_i, "decoding:logits:", logits_tr)
         yhat,loss=sequence_loss(logits_tr.rnn_output,en_batch,make_mask(en_batch))
         print("loss:",loss)
+        gdo=BatchGradientDescent(lr)
         gradients=gdo.compute_gradients(yhat,en_batch)
         gdo.apply_gradients(gradients)
         #print_gradients(gradients)

@@ -16,9 +16,11 @@ import org.mk.training.dl.core as core
 from org.mk.training.dl.execution import ExecutionContext
 from org.mk.training.dl.core import FFLayer
 from org.mk.training.dl.nn import EmbeddingLayer
-from org.mk.training.dl.nn import LookupTable
+from org.mk.training.dl.nn import TrainableVariable
 from org.mk.training.dl.common import change_internal_state_types
 from org.mk.training.dl.common import _item_or_tuple
+from org.mk.training.dl.common import retrieve_name
+
 class RNNLayer(object):
     def __init__(self,name=None,bi=False,fw_cell=None,bw_cell=None,prev=None):
         self.name=name
@@ -64,19 +66,48 @@ class MultiRNNCell(Cell):
         self.feedforwarddepth =len(cells)
         self.seqsize = 0
 
+        """
+        for ffi in range(self.feedforwarddepth):
+
+            #cell=cell_list[ffi]
+            #exec("%s = %d" % (str("cell"+str(ffi)),2))
+            var=str("cell"+str(ffi))
+            print("var:",var)
+            vars()[var]=self.feedforwardcells[ffi]
+            print("globals()[var]:",retrieve_name(vars()[var]))
+        """
     def _setinitparams(self,batch, seq, input_size,gen_X_Ds=False):
         self.seqsize=seq
         self.batch_size=batch
 
+        #print("MultiRNNCell:name:",retrieve_name(self))
+        mrcname=retrieve_name(self)
         for ffi in range(self.feedforwarddepth):
-            cell=self.feedforwardcells[ffi]
-            if not cell.init:
+            var=str("cell:"+mrcname+":"+str(ffi))
+            #print("var:",var)
+            vars()[var]=self.feedforwardcells[ffi]
+
+            #cellwamc=self.feedforwardcells[ffi]
+            #print("MRNNCell:retrieve_name:",retrieve_name(vars()[var]))
+            if not vars()[var].init:
                 if(ffi == 0):
-                    cell._setinitparams(batch, seq, input_size,gen_X_Ds=gen_X_Ds)
+                    vars()[var]._setinitparams(batch, seq, input_size,gen_X_Ds=gen_X_Ds)
                 else:
-                    cell._setinitparams(batch, seq, cell.hidden_size, Xfacing=False)
+                    vars()[var]._setinitparams(batch, seq, vars()[var].hidden_size, Xfacing=False)
         self.init=True
 
+        """
+        for ffi in range(self.feedforwarddepth):
+
+            cellwamc=self.feedforwardcells[ffi]
+            print("MRNNCell:retrieve_name:",retrieve_name(cellwamc))
+            if not cellwamc.init:
+                if(ffi == 0):
+                    cellwamc._setinitparams(batch, seq, input_size,gen_X_Ds=gen_X_Ds)
+                else:
+                    cellwamc._setinitparams(batch, seq, cellwamc.hidden_size, Xfacing=False)
+        self.init=True
+        """
     def setreverseDs(self,dh_next,dc_next):
         if(isinstance(dh_next,tuple)):
             """"""
@@ -136,7 +167,6 @@ class MultiRNNCell(Cell):
             feedforwardstate.append(returnstate)
             feedforwardoutput.append(output)
         self.seqsize += 1
-        #return _item_or_tuple(feedforwardoutput),_item_or_tuple(feedforwardstate)
         return feedforwardoutput,feedforwardstate
 
     def compute_gradients(self,dhtf,dh_nextmlco,t):
@@ -197,6 +227,8 @@ class LSTMStateTuple(object):
     def __repr__(self):
         return "LSTMStateTuple("+str(self.__dict__)+")"
 
+    """def __repr__(self):
+        return "LSTMStateTuple("+str(self.c.T)+str(self.h.T)+"""
     def clone(self):
         clonec=np.copy(self.c)
         cloneh=np.copy(self.h)
@@ -357,6 +389,7 @@ def bidirectional_dynamic_rnn(fw_cell,bw_cell,X,fw_initial_state=None,bw_initial
     fw_result = {}
     fw_cell.clearStatePerSequence(seq)
     for seqnum in range(seq):
+        #print("fw_cell.seq:",seqnum," X:",X[0:batch,seqnum].T)
         if(fw_initial_state is None):
             output,fw_newstate = fw_cell(X[0:batch,seqnum].T)
         else:
@@ -364,11 +397,12 @@ def bidirectional_dynamic_rnn(fw_cell,bw_cell,X,fw_initial_state=None,bw_initial
             #because it is initial state
             fw_initial_state=None
         fw_result[seqnum] = fw_newstate[-1].h;
+    #print("fw_resultdict:",fw_result)
     fw_result_array=np.array(list(fw_result.values())).reshape(seq,fw_cell.batch_size*fw_cell.hidden_size)
     fw_result=np.zeros((batch,seq,fw_cell.hidden_size))
     for item in range(batch):
         fw_result[item]=fw_result_array[:,item*fw_cell.hidden_size:item*fw_cell.hidden_size+fw_cell.hidden_size]
-    print("fw_result.shape:",fw_result.shape)
+    #print("fw_result.shape:",fw_result)
     """
     if(len(fw_newstate) == 1):
         fw_newstate=fw_newstate[0]
@@ -378,19 +412,23 @@ def bidirectional_dynamic_rnn(fw_cell,bw_cell,X,fw_initial_state=None,bw_initial
     #forward pass for backwardcell
     bw_result = {}
     bw_cell.clearStatePerSequence(seq)
+    #for seqnum in range(seq):
     for seqnum in reversed(range(seq)):
+        #print("bw_cell.seq:",seqnum," X:",X[0:batch,seqnum].T)
         if(bw_initial_state is None):
             output,bw_newstate = bw_cell(X[0:batch,seqnum].T)
         else:
             output,bw_newstate = bw_cell(X[0:batch,seqnum].T,bw_initial_state)
             #because it is initial state
             bw_initial_state=None
+        #print("bw_newstate[-1].h:",bw_newstate[-1].h,len(bw_newstate))
         bw_result[seqnum] = bw_newstate[-1].h;
+    #print("bw_resultdict:",bw_result)
     bw_result_array=np.array(list(bw_result.values())).reshape(seq,bw_cell.batch_size*bw_cell.hidden_size)
     bw_result=np.zeros((batch,seq,bw_cell.hidden_size))
     for item in range(batch):
         bw_result[item]=bw_result_array[:,item*bw_cell.hidden_size:item*bw_cell.hidden_size+bw_cell.hidden_size]
-    print("bw_result:",bw_result.shape)
+    #print("bw_result:",bw_result)
     """
     if(len(bw_newstate) == 1):
         bw_newstate=bw_newstate[0]
@@ -442,15 +480,12 @@ def compute_gradient(rnnlayer):
         if(rnnlayer.prev.grad is not None):
             dht_attention=rnnlayer.prev.grad
             if(isinstance(dht_attention,tuple)):
-                print("Encoder is BI:::::::::::;")
                 """"""
                 dht_attention_fw,dht_attention_bw=dht_attention
-                #dht_attention_bw=dht_attention_bw.transpose(0,2,1)
-                print("Encoder is BI:dht_attention_fw:",dht_attention_fw," \ndht_attention_bw:",dht_attention_bw)
             else:
                 """"""
                 dht_attention_fw=dht_attention
-                print("Encoder is UNI:::::::::::;",dht_attention_fw.shape)
+
             #print("dht_attention:",dht_attention,dht_attention.shape," dhtf_fw:",dhtf_fw.shape)
             decoder_attn=True
             #dht_attention=dht_attention.sum(axis=1)#.sum(axis=2,keepdims=True)
@@ -462,7 +497,6 @@ def compute_gradient(rnnlayer):
     fw_cell.clearDs()
     if (encoder):
         dh_nexts,dc_nexts=rnnlayer.prev.fw_cell.getreverseDs()
-        print("dh_nexts,dc_nexts:",dh_nexts,dc_nexts)
         if(rnnlayer.bi):
             layers=len(dh_nexts)
             if(layers%2 ==0 ):
@@ -508,16 +542,12 @@ def compute_gradient(rnnlayer):
             dhtf_bw=np.zeros((bw_cell.hidden_size,batch))
             dWy=None"""
 
-        #dh_nextmlco = np.zeros_like(dhtf_bw)
-        print("bw_cell.seqsize:",bw_cell.seqsize)
         dh_nextmlco=np.zeros((bw_cell.hidden_size,batch))
         if(encoder):
             for seqnum in reversed(range(bw_cell.seqsize )):
                 if dht_attention_bw is not None:
                     """"""
                     dhtf_bw=dht_attention_bw[:,((bw_cell.seqsize-1)-seqnum),:].T
-                    #dhtf_bw=dht_attention_bw[:,seqnum,:].T
-                    print("dhtf_bw:",seqnum,":",dhtf_bw)
                 if dh_nextmlco is None:
                     dh_nextmlco = np.zeros_like(dhtf_bw)
                 dh_nextmlco=bw_cell.compute_gradients(dhtf_bw,dh_nextmlco,seqnum)
@@ -567,7 +597,7 @@ def compute_gradient(rnnlayer):
     # X gradient for Embedding Layer to process.
     if(encoder):
         xgrads_fw=fw_cell.get_Xgradients()
-        print("xgrads_fw:",xgrads_fw.shape)
+        #print("xgrads_fw:",xgrads_fw.shape)
         rnnlayer.grad=((xgrads_fw,batch,seq),)
         if bw_cell is not None:
             xgrads=np.zeros_like(xgrads_fw)

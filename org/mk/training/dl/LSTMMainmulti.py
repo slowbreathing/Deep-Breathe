@@ -78,8 +78,8 @@ print("vocab_size", vocab_size)
 
 learning_rate = 0.001
 # training_iters = 50000
-training_iters = 2
-display_step = 500
+training_iters = 200
+display_step = 100
 n_input = 3
 n_hidden = 5
 rnd = np.random.RandomState(42)
@@ -92,11 +92,40 @@ acc_total = 0
 loss_total = 0
 print("offset:", offset)
 # only for testing
-
+"""
 with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
     cell1 = LSTMCell(n_hidden,debug=True)
     cell2 = LSTMCell(n_hidden,debug=True)
 cell = MultiRNNCell([cell1, cell2])
+n_layers=2
+cell_list=[]
+for i in range(n_layers):
+    with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
+        cell_list.append(LSTMCell(5,debug=True))
+cell=MultiRNNCell(cell_list)
+gdo=BatchGradientDescent(learning_rate)
+out_l = Dense(10,kernel_initializer=init_ops.Constant(out_weights),bias_initializer=init_ops.Constant(out_biases))
+"""
+"""
+with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
+    cell1 = LSTMCell(n_hidden,debug=True)
+    cell2 = LSTMCell(n_hidden,debug=True)
+cell = MultiRNNCell([cell1, cell2])"""
+"""
+n_layers=2
+cell_list=[]
+for i in range(n_layers):
+    with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
+        #cellwam=LSTMCell(5,debug=True)
+        #cell_list.append(cellwam)
+        cell_list.append(LSTMCell(5,debug=True))
+cellw=MultiRNNCell(cell_list)
+"""
+with WeightsInitializer(initializer=init_ops.Constant(0.1)) as vs:
+    cell1 = LSTMCell(n_hidden,debug=True)
+    cell2 = LSTMCell(n_hidden,debug=True)
+cell = MultiRNNCell([cell1, cell2])
+
 gdo=BatchGradientDescent(learning_rate)
 out_l = Dense(10,kernel_initializer=init_ops.Constant(out_weights),bias_initializer=init_ops.Constant(out_biases))
 
@@ -120,6 +149,7 @@ while step < training_iters:
     result, state = dynamic_rnn(cell, symbols_in_keys)
     #result, state = dynamic_rnn(cell, symbols_in_keys,initstates)
     (c, h) = state[-1].c,state[-1].h
+    #(c, h) = state.c,state.h
     print("final:", result,state,h.shape)
 
     #last layer of Feed Forward to compare to transform result to the shape of target

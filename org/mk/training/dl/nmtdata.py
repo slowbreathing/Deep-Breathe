@@ -82,7 +82,7 @@ def build_word2id_mapping(word_counts_dict,embeddings_index):
     sortedwords = list(word_counts_dict.items())
     sortedwords.sort()
     for word, count in sortedwords:
-        # print("word, count:",word,":", count)
+        #print("word, count:",word,":", count," value:",value)
         if count >= count_threshold or word in embeddings_index:
             word2int[word] = value
             value += 1
@@ -95,16 +95,16 @@ def build_word2id_mapping(word_counts_dict,embeddings_index):
         int2word[value] = word
     return word2int, int2word
 
-def build_word_vector_matrix(vector_file):
+def build_word_vector_matrix(vector_file,dim_len):
     embedding_index = {}
     with codecs.open(vector_file, 'r', 'utf-8') as f:
         for i, line in enumerate(f):
             sr = line.split()
-            if (len(sr) < 26):
+            if (len(sr) < dim_len):
                 print("sr:", sr, ":", len(sr))
                 continue
             word = sr[0]
-            # print("word:",word)
+            #  print("word:",word," len:",len(sr))
             embedding = np.asarray(sr[1:], dtype='float32')
             embedding_index[word] = embedding
     return embedding_index
@@ -179,7 +179,7 @@ def get_nmt_data():
     print("Total French words in Vocabulary:", len(word_counts_dict_fr))
     print("Total English words in Vocabulary", len(word_counts_dict_en))
 
-    embeddings_index = build_word_vector_matrix(args.vocab)
+    embeddings_index = build_word_vector_matrix(args.vocab,args.dim_len)
     """
     Giving each word a unique int ID for represenation. This will be used to index into
     embedding matrix.
@@ -190,6 +190,8 @@ def get_nmt_data():
     , 7: 'stories', 8: 'tell', 9: 'the', 10: 'to', 11: 'you', 12: 'TOKEN_UNK', 13: 'TOKEN_PAD',
     14: 'TOKEN_EOS', 15: 'TOKEN_GO'}
     """
+
+
     fr_word2int, fr_int2word = build_word2id_mapping(word_counts_dict_fr,embeddings_index)
     en_word2int, en_int2word = build_word2id_mapping(word_counts_dict_en,embeddings_index)
     print("Fr INDEX:", fr_word2int, ":", fr_int2word)

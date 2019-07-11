@@ -87,9 +87,9 @@ print("vocab_size", vocab_size)
 
 learning_rate = 0.001
 # training_iters = 50000
-training_iters = 2
+training_iters = 200
 
-display_step = 500
+display_step = 100
 n_input = 3
 n_hidden = 5
 rnd = np.random.RandomState(42)

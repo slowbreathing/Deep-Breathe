@@ -2,15 +2,17 @@
 
 import numpy as np
 from org.mk.training.dl import init_ops
+import inspect
 
 
 def loss(pred,labels):
     """
     One at a time.
     args:
-        pred-(seg=1),input_size
-        labels-(seg=1),input_size
+        pred-(seq=1),input_size
+        labels-(seq=1),input_size
     """
+    #print(np.multiply(labels, -np.log(pred)))
     return np.multiply(labels, -np.log(pred)).sum(1)
 
 def softmax(logits):
@@ -72,23 +74,21 @@ def batch_multiply(x,y):
 
 
 def _softmax_grad(sm):
-    # Take the derivative of softmax element w.r.t the each logit which is usually Wi * X
-    # input s is softmax value of the original input x.
+    # Below is the softmax value for [1, 3, 5, 7]
     # [2.14400878e-03 1.58422012e-02 1.17058913e-01 8.64954877e-01]
     # initialize the 2-D jacobian matrix.
     jacobian_m = np.diag(sm)
-    #print("jacobian_m:",jacobian_m)
     for i in range(len(jacobian_m)):
         for j in range(len(jacobian_m)):
             if i == j:
-                print("equal:",i, sm[i],(1-sm[i]))
+                #print("equal:",i, sm[i],(1-sm[i]))
                 #equal: 0 0.002144008783584634 0.9978559912164153
                 #equal: 1 0.015842201178506925 0.9841577988214931
                 #equal: 2 0.11705891323853292 0.8829410867614671
                 #equal: 3 0.8649548767993754 0.13504512320062456
                 jacobian_m[i][j] = sm[i] * (1-sm[i])
             else:
-                print("not equal:",i,j,sm[i],sm[j])
+                #print("not equal:",i,j,sm[i],sm[j])
                 #not equal: 0 1 0.002144008783584634 0.015842201178506925
                 #not equal: 0 2 0.002144008783584634 0.11705891323853292
                 #not equal: 0 3 0.002144008783584634 0.8649548767993754
@@ -119,7 +119,7 @@ def cross_entropy_loss(pred,labels):
     Does an internal softmax before loss calculation.
     args:
         pred- batch,seq,input_size
-        labels-batch,seq(has to be transformed before comparision with preds(line-43).)
+        labels-batch,seq(has to be transformed before comparision with preds(line-133).)
     """
     checkdatadim(pred,3)
     checkdatadim(labels,2)
@@ -136,7 +136,7 @@ def cross_entropy_loss(pred,labels):
     return yhat,lossesa
 
 def input_one_hot(num,vocab_size):
-    print(num)
+    #print(num)
     x = np.zeros(vocab_size)
     x[int(num)] = 1
     x=np.reshape(x,[1,-1])
@@ -237,3 +237,20 @@ def _item_or_lastitem(dat):
             return dat[0]
         else:
             return dat[-1]
+
+def retrieve_name(var):
+        """
+        Gets the name of var. Does it from the out most frame inner-wards.
+        :param var: variable to get name from.
+        :return: string
+        """
+        clname=type(var).__name__
+        for fi in reversed(inspect.stack()):
+            names = [var_name for var_name, var_val in fi.frame.f_locals.items() if var_val is var]
+            #print("names",names)
+            if len(names) > 0:
+                #name=str(clname+":"+names[0])
+                name=str(clname+":"+names[0])
+                #print("Objectname:",name)
+                return name
+                #return str(clname+":"+names[0]+":"+str(id(var)))

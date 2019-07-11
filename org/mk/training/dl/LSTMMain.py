@@ -77,8 +77,8 @@ print("vocab_size", vocab_size)
 
 learning_rate = 0.001
 # training_iters = 50000
-training_iters = 2
-display_step = 500
+training_iters = 200
+display_step = 100
 n_input = 3
 n_hidden = 5
 rnd = np.random.RandomState(42)
@@ -102,6 +102,7 @@ while step < training_iters:
     print("offset:", offset)
     symbols_in_keys = [input_one_hot(dictionary[str(train_data[i])],vocab_size) for i in range(offset, offset + n_input)]
     symbols_in_keys = np.reshape(np.array(symbols_in_keys), [-1, n_input, vocab_size])
+    print("symbols_in_keys:",symbols_in_keys)
     target=dictionary[str(train_data[offset + n_input])]
     result, state = dynamic_rnn(cell, symbols_in_keys)
     (c, h) = state.c,state.h

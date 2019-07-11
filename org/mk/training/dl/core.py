@@ -8,6 +8,8 @@ from org.mk.training.dl.common import checkdatadim
 from org.mk.training.dl.common import checklistdim
 from org.mk.training.dl.common import checktupledim
 from org.mk.training.dl.execution import ExecutionContext
+from org.mk.training.dl.common import retrieve_name
+from org.mk.training.dl.nn import TrainableVariable
 
 class FFLayer(object):
     def __init__(self,name=None,layer=None,yhat=None,target=None):
@@ -21,7 +23,6 @@ class FFLayer(object):
 
 
     def __repr__(self):
-        #return "FFLayer("+str(self.__dict__)+")"
         return "FFLayer("+str(self.name)+","+str(self.layer)+","+str(self.target)+")"
     def compute_gradient(self):
         return compute_gradient(self)
@@ -39,32 +40,34 @@ class Dense(object):
                kernel_constraint=None,
                bias_constraint=None,
                trainable=True,
-               name=None):
+               name=None,
+               debug=False):
+
+        self.debug=debug
         self.use_bias=use_bias
         self.units=units;
-        if kernel_initializer is None:
-            self.kernel_initializer=init_ops.RandomUniform()
-        else:
-            self.kernel_initializer= kernel_initializer
-
-        if(WeightsInitializer.initializer is None):
-            #WeightsInitializer.initializer=init_ops.RandomUniform()
-            self.init_function=None
-        else:
+        # First preference to static initializer through "WeightsInitializer"
+        # but dont ise both to avoid confusion
+        if(WeightsInitializer.initializer is not None):
             self.init_function=WeightsInitializer.initializer
+        else:
+            #If that's not then the usual "kernel_initializer"
+            if kernel_initializer is None:
+                self.init_function=init_ops.RandomUniform()
+            else:
+                self.init_function= kernel_initializer
 
-        self.kernel=None
-        self.bias=None
-        if(self.use_bias):
-            self.bias=bias_initializer(units);
+        if (self.use_bias):
+            if(bias_initializer is not None):
+                self.bias_initializer=bias_initializer
+        self.kernelname=None
+        self.biasname=None
 
         self.use_act=False
         self.activation=None
         if(activation is not None):
             self.use_act=True
             self.activation=activation
-        self.pred=None
-        self.yhat=None
         self.trainable=trainable
         if name is None:
             self.name="FeedForward"
@@ -72,17 +75,21 @@ class Dense(object):
             self.name=name
         self.ffl=FFLayer(name=self.name,layer=self)
 
-    def __repr__(self):
-        #return "FFLayer("+str(self.__dict__)+")"
-        return "Dense("+str(self.name)+str(self.dense_kernel_shape)+")"
+
+    #def __repr__(self):
+        #return "Dense("+str(self.name)+str(self.dense_kernel_shape)+")"
 
     @property
-    def dense_kernel_shape(self):
+    def kernel_shape(self):
         return self.kernel.shape
 
     @property
-    def dense_kernel(self):
-        return self.kernel
+    def kernel(self):
+        return TrainableVariable.getInstance(self.kernelname).value
+
+    @property
+    def bias(self):
+        return TrainableVariable.getInstance(self.biasname).value
 
     def __call__(self,inputs):
         """
@@ -92,88 +99,48 @@ class Dense(object):
             result- will be of shape batchsize,num_units
             or batchsize,sequence,num_units
         """
+        kernel=None
+        bias=None
         if(self.trainable):
             ec=ExecutionContext.getInstance()
             ec.register(self.ffl)
-
-
-        # initialize the kernel,first priority to WeightsInitializer
-        if self.kernel is None:
-            print("inputs:::::::::::::::::::::::",inputs.shape," Kernel Shape:",self.name,":",self.get_input_columnshape(inputs),self.units)
-            #r,c=inputs.shape
+        if self.kernelname is None:
+            self.kernelname=str(retrieve_name(self)+":"+"kernel")
+            if(self.use_bias):
+                self.biasname=str(retrieve_name(self)+":"+"bias")
+        kernel=TrainableVariable.getInstance(self.kernelname)
+        bias=TrainableVariable.getInstance(self.biasname)
+        if kernel is None:
             inputcolumnsize=self.get_input_columnshape(inputs)
-            if(self.init_function is not None):
-                #self.kernel=WeightsInitializer.initializer((c,self.units))
-                self.kernel=self.init_function((inputcolumnsize,self.units))
-                #print("self.kernel:",self.kernel)
-            else:
-                self.kernel=self.kernel_initializer((inputcolumnsize,self.units));
-        if(self.use_bias):
-            if(self.use_act):
-                self.pred=np.dot(inputs,self.kernel)+self.bias
-                self.yhat=self.activation(self.pred)
-                return self.yhat
-            else:
-                self.pred=np.dot(inputs,self.kernel)+self.bias
-                return self.pred
+            kernel=TrainableVariable.getInstance(self.kernelname,self.init_function((inputcolumnsize,self.units))).value
+            if(self.use_bias):
+                bias=TrainableVariable.getInstance(self.biasname,self.bias_initializer(self.units)).value
+            if(self.debug):
+                print("KernelName:",self.kernelname)
+                print("self.init_function:",self.init_function)
+                print("self.kernel:",kernel)
         else:
-            self.pred=np.dot(inputs,self.kernel)
-            return self.pred
+            kernel=kernel.value
+            if self.use_bias:
+                bias=bias.value
+        pred=np.dot(inputs,kernel)
+        if(self.use_bias):
+            pred=(pred+bias)
+            if(self.use_act):
+                yhat=self.activation(pred)
+                return yhat
+
+        return pred
 
     def get_input_columnshape(self,inputs):
+        if(self.debug):
+            print("KernelName:",self.kernelname)
         shape=inputs.shape
         if (len(shape)in [2,3]):
-
             return shape[-1]
-
         else:
             raise ValueError("shape of input not understood.",shape)
 
-    """
-    def __call__(self,inputs):
-        ec=ExecutionContext.getInstance()
-        ec.register(self.ffl)
-
-
-        # initialize the kernel,first priority to WeightsInitializer
-        if self.kernel is None:
-            r,c=inputs.shape
-            print("inputs:::::::::::::::::::::::",inputs.shape)
-            if(self.init_function is not None):
-                #self.kernel=WeightsInitializer.initializer((c,self.units))
-                self.kernel=self.init_function((c,self.units))
-                #print("self.kernel:",self.kernel)
-            else:
-                self.kernel=self.kernel_initializer((c,self.units));
-        if(self.use_bias):
-            if(self.use_act):
-                self.pred=self._multiply(inputs)+self.bias
-                self.yhat=self.activation(self.pred)
-                return self.yhat
-            else:
-                self.pred=self._multiply(inputs)+self.bias
-                return self.pred
-        else:
-            self.pred=self._multiply(inputs)
-            return self.pred
-
-
-    def _multiply(self,inputs):
-
-        shape=inputs.shape
-        if (len(shape)==2):
-            return np.dot(inputs,self.kernel)
-
-        elif(len(shape)==3):
-            bat,seq,vc=inputs.shape
-            print("direct:",np.dot(inputs,self.kernel))
-            result=np.zeros((bat,seq,self.units))
-            for i in range(bat):
-                result[i]=np.dot(inputs[i],self.kernel)
-            return result
-        else:
-            raise ValueError("shape of input not understood.")
-    """
 
 def compute_gradient(fflayer):
     """
