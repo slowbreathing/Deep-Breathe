@@ -1,3 +1,8 @@
+Installation Requirements
+tensorflow(only for comparisons)
+python 3.5 or above
+numpy.
+
 #LSTMs
 mkdir resources/tmp/rnn_words
 python org/mk/training/dl/LSTMAllByitself/LSTMMain.py input/belling_the_cat10.txt
