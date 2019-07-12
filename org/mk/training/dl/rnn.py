@@ -66,29 +66,15 @@ class MultiRNNCell(Cell):
         self.feedforwarddepth =len(cells)
         self.seqsize = 0
 
-        """
-        for ffi in range(self.feedforwarddepth):
-
-            #cell=cell_list[ffi]
-            #exec("%s = %d" % (str("cell"+str(ffi)),2))
-            var=str("cell"+str(ffi))
-            print("var:",var)
-            vars()[var]=self.feedforwardcells[ffi]
-            print("globals()[var]:",retrieve_name(vars()[var]))
-        """
     def _setinitparams(self,batch, seq, input_size,gen_X_Ds=False):
         self.seqsize=seq
         self.batch_size=batch
 
-        #print("MultiRNNCell:name:",retrieve_name(self))
         mrcname=retrieve_name(self)
         for ffi in range(self.feedforwarddepth):
             var=str("cell:"+mrcname+":"+str(ffi))
-            #print("var:",var)
             vars()[var]=self.feedforwardcells[ffi]
 
-            #cellwamc=self.feedforwardcells[ffi]
-            #print("MRNNCell:retrieve_name:",retrieve_name(vars()[var]))
             if not vars()[var].init:
                 if(ffi == 0):
                     vars()[var]._setinitparams(batch, seq, input_size,gen_X_Ds=gen_X_Ds)
@@ -96,18 +82,6 @@ class MultiRNNCell(Cell):
                     vars()[var]._setinitparams(batch, seq, vars()[var].hidden_size, Xfacing=False)
         self.init=True
 
-        """
-        for ffi in range(self.feedforwarddepth):
-
-            cellwamc=self.feedforwardcells[ffi]
-            print("MRNNCell:retrieve_name:",retrieve_name(cellwamc))
-            if not cellwamc.init:
-                if(ffi == 0):
-                    cellwamc._setinitparams(batch, seq, input_size,gen_X_Ds=gen_X_Ds)
-                else:
-                    cellwamc._setinitparams(batch, seq, cellwamc.hidden_size, Xfacing=False)
-        self.init=True
-        """
     def setreverseDs(self,dh_next,dc_next):
         if(isinstance(dh_next,tuple)):
             """"""
