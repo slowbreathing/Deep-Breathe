@@ -41,9 +41,11 @@ class Dense(object):
                bias_constraint=None,
                trainable=True,
                name=None,
-               debug=False):
+               debug=False,
+               bpdebug=False):
 
         self.debug=debug
+        self.bpdebug=bpdebug
         self.use_bias=use_bias
         self.units=units;
         # First preference to static initializer through "WeightsInitializer"
@@ -162,6 +164,10 @@ def compute_gradient(fflayer):
             target_one_hot[batnum][i]=input_one_hot(target[batnum][i],size)
     dy = yhat.copy()
     dy = dy - target_one_hot
+    if (fflayer.layer.bpdebug):
+        print("yhat:",yhat)
+        print("labeltransformed:",target_one_hot)
+        print("gradient:",dy)
     #a convention to save to this field the grad that has to be passes back to the next layer in reverse
     fflayer.grad=dy
     # return whatever has to be returned to be applied
