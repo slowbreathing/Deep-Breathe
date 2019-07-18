@@ -24,8 +24,8 @@ from org.mk.training.dl.nn import TrainableVariable
 
 class LSTMCell(Cell):
     # initialise the Recurrent Neural Network
-    def __init__(self, hidden_size, forget_bias=1, debug=False):
-        super().__init__(hidden_size,debug)
+    def __init__(self, hidden_size, forget_bias=1, debug=False,backpassdebug=False):
+        super().__init__(hidden_size,debug,backpassdebug)
         self.forget_bias = forget_bias
         self.seqsize=0
         # first column is for biases
@@ -225,6 +225,19 @@ class LSTMCell(Cell):
         self.ot[self.seqsize] = o
         self.cprojt[self.seqsize] = cproj
         self.zt[self.seqsize] = z
+        if(self.debug):
+            print("-----------------------------------------------------------------")
+            print("ForwardPass:Debug:Name:",self.lstmname)
+            print("-----------------------------------------------------------------")
+            print("input+state:",z)
+            print("sequence:",self.seqsize)
+            print("f:",f)
+            print("i:",i)
+            print("cproj:",cproj)
+            print("o:",o)
+            print("cnew:",cnew)
+            print("hnew:",hnew)
+            print("-----------------------------------------------------------------")
         self.seqsize+=1
 
         tup=LSTMStateTuple(cnew.T,hnew.T)
@@ -271,37 +284,51 @@ class LSTMCell(Cell):
         self.h = zero_state_initializer(self.hidden_size, self.batch_size)
         self.dxt=np.zeros((self.seqmax*self.batch_size,self.input_size))
 
+    """
+        *
+        *
+        *
+        *
+        *
+    """
+
     def compute_gradients(self,dhtf,dh_nextmlco,t):
-        #print("dh_next:",self.dh_next," dC_next",self.dC_next)
+
         z = self.zt[t].T
         self.dht=dhtf
-
         self.dht = self.dht + self.dh_next
-        dot = np.multiply(self.dht, self.tanh_array(self.ct[t]) * self.dsigmoid(self.ot[t]))
+        if(self.backpassdebug):
+            print("-----------------------------------------------------------------")
+            print("BackPass:Debug:Name:",self.lstmname)
+            print("-----------------------------------------------------------------")
+            print("timestep:",t)
+            print("input+state:",z)
+            print("dhtf(recurr(ext)):",dhtf)
+            print("dhtf(recurr(int)):",self.dh_next)
 
         dct = np.multiply(self.dht, self.ot[t] * self.dtanh(self.ct[t])) + self.dC_next
-        dcproj = np.multiply(dct, self.it[t] * (1 - self.cprojt[t] * self.cprojt[t]))
+
+        WLSTM=TrainableVariable.getInstance(self.lstmname).value
 
         dft = np.multiply(dct, self.coldt[t] * self.dsigmoid(self.ft[t]))
-
-        dit = np.multiply(dct, self.cprojt[t] * self.dsigmoid(self.it[t]))
-
+        dxf = np.dot(dft.T, WLSTM[0:self.hidden_size, 1:])
         self.dwf += np.dot(dft, z)
         self.dbf += dft.sum(1,keepdims=True)
-        WLSTM=TrainableVariable.getInstance(self.lstmname).value
-        dxf = np.dot(dft.T, WLSTM[0:self.hidden_size, 1:])
 
+        dit = np.multiply(dct, self.cprojt[t] * self.dsigmoid(self.it[t]))
+        dxi = np.dot(dit.T, WLSTM[self.hidden_size * 1:self.hidden_size * 2, 1:])
         self.dwi += np.dot(dit, z)
         self.dbi += dit.sum(1,keepdims=True)
-        dxi = np.dot(dit.T, WLSTM[self.hidden_size * 1:self.hidden_size * 2, 1:])
 
+        dcproj = np.multiply(dct, self.it[t] * (1 - self.cprojt[t] * self.cprojt[t]))
+        dxc = np.dot(dcproj.T, WLSTM[self.hidden_size * 2:self.hidden_size * 3, 1:])
         self.dwc += np.dot(dcproj, z)
         self.dbc += dcproj.sum(1,keepdims=True)
-        dxc = np.dot(dcproj.T, WLSTM[self.hidden_size * 2:self.hidden_size * 3, 1:])
 
+        dot = np.multiply(self.dht, self.tanh_array(self.ct[t]) * self.dsigmoid(self.ot[t]))
+        dxo = np.dot(dot.T, WLSTM[self.hidden_size * 3:self.hidden_size * 4, 1:])
         self.dwo += np.dot(dot, z)
         self.dbo += dot.sum(1,keepdims=True)
-        dxo = np.dot(dot.T, WLSTM[self.hidden_size * 3:self.hidden_size * 4, 1:])
 
         dx = dxf + dxi + dxc + dxo
         xcomp=dx[:, :self.input_size]
@@ -315,6 +342,37 @@ class LSTMCell(Cell):
         self.dC_next = np.multiply(dct, self.ft[t])
 
         dh_next_recurr=dx[:, :self.hidden_size].T
+
+
+        if(self.backpassdebug):
+            """print("*****************************************************************")
+            print("BackPass:Debug:Name:",self.lstmname)
+            print("*****************************************************************")
+            print("timestep:",t)
+            print("input+state:",z)
+            print("dhtf(recurr(ext)):",dhtf)
+            print("dhtf(recurr(int)):",self.dh_next)"""
+            print("dhtf(combined):",self.dht)
+            print("dct:",dct)
+
+            print("dft:",dft)
+            print("self.dbf:",self.dbf)
+            print("dxf:",dxf)
+
+            print("dit:",dit)
+            print("dxi:",dxi)
+
+            print("dcproj:",dcproj)
+            print("dxc:",dxc)
+
+            print("dot:",dot)
+            print("dxo:",dxo)
+
+            print("xcomp:",xcomp)
+            print("self.dxt:",self.dxt)
+            print("dhtf(recurr(int(after))):",self.dh_next)
+            print("dc_next(recurr(int(after))):",self.dC_next)
+            print("-----------------------------------------------------------------")
         return np.copy(dh_next_recurr)
 
     def get_Xgradients(self):

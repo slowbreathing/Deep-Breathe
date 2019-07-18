@@ -42,10 +42,10 @@ class Dense(object):
                trainable=True,
                name=None,
                debug=False,
-               bpdebug=False):
+               backpassdebug=False):
 
         self.debug=debug
-        self.bpdebug=bpdebug
+        self.backpassdebug=backpassdebug
         self.use_bias=use_bias
         self.units=units;
         # First preference to static initializer through "WeightsInitializer"
@@ -117,15 +117,21 @@ class Dense(object):
             kernel=TrainableVariable.getInstance(self.kernelname,self.init_function((inputcolumnsize,self.units))).value
             if(self.use_bias):
                 bias=TrainableVariable.getInstance(self.biasname,self.bias_initializer(self.units)).value
-            if(self.debug):
-                print("KernelName:",self.kernelname)
-                print("self.init_function:",self.init_function)
-                print("self.kernel:",kernel)
+            print("self.debug:",self.debug)
+
         else:
             kernel=kernel.value
             if self.use_bias:
                 bias=bias.value
         pred=np.dot(inputs,kernel)
+        if(self.debug):
+            print("*****************************************************************")
+            print("ForwardPass:Debug:Name:",self.name)
+            print("*****************************************************************")
+            print("KernelName:",self.kernelname)
+            print("self.init_function:",self.init_function)
+            print("self.kernel:",kernel)
+            print("*****************************************************************")
         if(self.use_bias):
             pred=(pred+bias)
             if(self.use_act):
@@ -164,10 +170,15 @@ def compute_gradient(fflayer):
             target_one_hot[batnum][i]=input_one_hot(target[batnum][i],size)
     dy = yhat.copy()
     dy = dy - target_one_hot
-    if (fflayer.layer.bpdebug):
+    if (fflayer.layer.backpassdebug):
+        print("*****************************************************************")
+        print("BackPass:Debug:Name:",fflayer.layer.name)
+        print("*****************************************************************")
         print("yhat:",yhat)
+        print("label:",target)
         print("labeltransformed:",target_one_hot)
         print("gradient:",dy)
+        print("*****************************************************************")
     #a convention to save to this field the grad that has to be passes back to the next layer in reverse
     fflayer.grad=dy
     # return whatever has to be returned to be applied
