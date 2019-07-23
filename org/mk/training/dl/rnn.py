@@ -41,10 +41,11 @@ class RNNLayer(object):
 class Cell(object):
     # initialise the Recurrent Neural Network
 
-    def __init__(self,hidden_size,debug):
+    def __init__(self,hidden_size,debug,backpassdebug):
         self.input_size = 0
         self.hidden_size = hidden_size
         self.debug = debug
+        self.backpassdebug=backpassdebug
         self.ht={}
         self.batch_size=0
         self.h=None
@@ -61,7 +62,7 @@ class Cell(object):
 class MultiRNNCell(Cell):
     # initialise the Recurrent Neural Network
     def __init__(self,cells,state=None):
-        super().__init__(cells[0].hidden_size,cells[0].debug)
+        super().__init__(cells[0].hidden_size,cells[0].debug,cells[0].backpassdebug)
         self.feedforwardcells=cells
         self.feedforwarddepth =len(cells)
         self.seqsize = 0
@@ -143,13 +144,17 @@ class MultiRNNCell(Cell):
         self.seqsize += 1
         return feedforwardoutput,feedforwardstate
 
-    def compute_gradients(self,dhtf,dh_nextmlco,t):
-
+    def compute_gradients(self,dhtf,t):
+        #print("compute_gradients.dh_nextmlco:",dh_nextmlco)
+        dh_nextmlco = np.zeros_like(dhtf)
         for tc in reversed(range(self.feedforwarddepth)):
 
             cell = self.feedforwardcells[tc]
+            print("cell.dh_next:",cell.dh_next)
             cell.dh_next+=dh_nextmlco
-            dh_nextmlco=cell.compute_gradients(dhtf,dh_nextmlco, t)
+            print("cell.dh_next(after):",cell.dh_next)
+            dh_nextmlco=cell.compute_gradients(dhtf, t)
+            print("dh_nextmlco:",dh_nextmlco)
             dhtf = np.zeros_like(dhtf)
 
     def get_Xgradients(self):
@@ -298,7 +303,6 @@ def bidirectional_dynamic_rnn(fw_cell,bw_cell,X,fw_initial_state=None,bw_initial
     ec=ExecutionContext.getInstance()
     checkdatadim(X,3)
     batch, seq, input_size = X.shape
-    print("batch:",batch, "seq:",seq, "input_size:",input_size)
 
     #forword cell sanity checks
     #Wrap cell with MultiRNN because of code reuse.
@@ -460,14 +464,10 @@ def compute_gradient(rnnlayer):
                 """"""
                 dht_attention_fw=dht_attention
 
-            #print("dht_attention:",dht_attention,dht_attention.shape," dhtf_fw:",dhtf_fw.shape)
             decoder_attn=True
-            #dht_attention=dht_attention.sum(axis=1)#.sum(axis=2,keepdims=True)
-            #print("dht_attention:",dht_attention)
-            #dht_attention=dht_attention
-            #dhtf_fw=dht_attention.T
 
-    dh_nextmlco = np.zeros_like(dhtf_fw)
+    #for forward cell
+    #dh_nextmlco = np.zeros_like(dhtf_fw)
     fw_cell.clearDs()
     if (encoder):
         dh_nexts,dc_nexts=rnnlayer.prev.fw_cell.getreverseDs()
@@ -493,9 +493,11 @@ def compute_gradient(rnnlayer):
         if dht_attention is not None:
             """"""
             dhtf_fw=dht_attention_fw[:,seqnum,:].T
-        if dh_nextmlco is None:
-            dh_nextmlco = np.zeros_like(dhtf_fw)
-        dh_nextmlco=fw_cell.compute_gradients(dhtf_fw,dh_nextmlco,seqnum)
+        #if dh_nextmlco is None:
+            #dh_nextmlco = np.zeros_like(dhtf_fw)
+        dh_nextmlco=fw_cell.compute_gradients(dhtf_fw,seqnum)
+        #print("compute_gradients1.dh_nextmlco:",dh_nextmlco)
+        #print("dh_nextmlco:",dh_nextmlco)
         dhtf_fw=np.zeros_like(dhtf_fw)
 
     #For backward cell
@@ -512,26 +514,22 @@ def compute_gradient(rnnlayer):
             dhtf_bw = np.dot(dy, out_weights[bw_cell.hidden_size:bw_cell.hidden_size*2,:].T).T
             dWybw=np.dot(bw_cell.ht[0],dy)
             dWy=np.concatenate((dWyfw,dWybw),0)
-        """else:
-            dhtf_bw=np.zeros((bw_cell.hidden_size,batch))
-            dWy=None"""
 
-        dh_nextmlco=np.zeros((bw_cell.hidden_size,batch))
+        #dh_nextmlco=np.zeros((bw_cell.hidden_size,batch))
         if(encoder):
             for seqnum in reversed(range(bw_cell.seqsize )):
                 if dht_attention_bw is not None:
                     """"""
                     dhtf_bw=dht_attention_bw[:,((bw_cell.seqsize-1)-seqnum),:].T
-                if dh_nextmlco is None:
-                    dh_nextmlco = np.zeros_like(dhtf_bw)
-                dh_nextmlco=bw_cell.compute_gradients(dhtf_bw,dh_nextmlco,seqnum)
+                #if dh_nextmlco is None:
+                    #dh_nextmlco = np.zeros_like(dhtf_bw)
+                dh_nextmlco=bw_cell.compute_gradients(dhtf_bw,seqnum)
                 dhtf_bw=np.zeros_like(dhtf_bw)
         else:
             if dh_nextmlco is None:
                 dh_nextmlco = np.zeros_like(dhtf_bw)
-            dh_nextmlco=bw_cell.compute_gradients(dhtf_bw,dh_nextmlco,0)
+            dh_nextmlco=bw_cell.compute_gradients(dhtf_bw,0)
             dhtf_bw=np.zeros_like(dhtf_bw)
-        #dWy=np.concatenate((dWyfw,dWybw),0)
     else:
         dWy=dWyfw
     dBy = dy
@@ -550,6 +548,7 @@ def compute_gradient(rnnlayer):
         ycomp=[]
         ycomp.append(((dWy,out_weights),(dBy,out_biases)))
         grads['Y']=ycomp
+        #print("ycomp:",ycomp)
 
     #"get_gradients()" simply gets the gradients calculated by compute_gradient called earlier
     #fw_cell(s)

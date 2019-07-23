@@ -226,14 +226,14 @@ def compute_gradient(declayer):
     fw_cell.clearDs()
     dWyfw=np.zeros((fw_cell.hidden_size,size))
     dhtf_fw=np.zeros((fw_cell.hidden_size,batch))
-    dh_nextmlco = np.zeros_like(dhtf_fw)
+    #dh_nextmlco = np.zeros_like(dhtf_fw)
     #print("fullh[0,:,:].shape:",fullh[0,:,:].shape)
     for seqnum in reversed(range(fw_cell.seqsize )):
         dWyfw+=np.dot(fullh[seqnum,:,:],np.reshape(ycomp[:,seqnum,:],[batch,size]))
         dhtf_fw =np.dot(ycomp[:,seqnum,:], out_weights.T).T
-        if dh_nextmlco is None:
-            dh_nextmlco = np.zeros_like(dhtf_fw)
-        dh_nextmlco=fw_cell.compute_gradients(dhtf_fw,dh_nextmlco,seqnum)
+        #if dh_nextmlco is None:
+            #dh_nextmlco = np.zeros_like(dhtf_fw)
+        dh_nextmlco=fw_cell.compute_gradients(dhtf_fw,seqnum)
 
     dWy=dWyfw/(batch*seq)
     dBy = dy

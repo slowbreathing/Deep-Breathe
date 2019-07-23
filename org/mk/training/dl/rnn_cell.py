@@ -290,10 +290,10 @@ class LSTMCell(Cell):
         *
         *
         *
-    """
+        """
 
-    def compute_gradients(self,dhtf,dh_nextmlco,t):
-
+    def compute_gradients(self,dhtf,t):
+    #def compute_gradients(self,dhtf,dh_nextmlco,t):
         z = self.zt[t].T
         self.dht=dhtf
         self.dht = self.dht + self.dh_next
@@ -330,18 +330,17 @@ class LSTMCell(Cell):
         self.dwo += np.dot(dot, z)
         self.dbo += dot.sum(1,keepdims=True)
 
-        dx = dxf + dxi + dxc + dxo
-        xcomp=dx[:, :self.input_size]
+        dhx = dxf + dxi + dxc + dxo
+        xcomp=dhx[:, :self.input_size]
 
-        #print("XCOMP:",self.Xfacing, self.gen_X_Ds)
         if(self.Xfacing and self.gen_X_Ds):
             for bi in range(self.batch_size):
-                #print("xcomp[bi,:]:",xcomp[bi,:])
                 self.dxt[t+(bi*self.seqsize)]=xcomp[bi,:]#.reshape((1,-1))
-        self.dh_next = dx[:, self.input_size:].T
+
+        self.dh_next = dhx[:, self.input_size:].T
         self.dC_next = np.multiply(dct, self.ft[t])
 
-        dh_next_recurr=dx[:, :self.hidden_size].T
+        dh_next_recurr=dhx[:, :self.hidden_size].T
 
 
         if(self.backpassdebug):
@@ -368,12 +367,15 @@ class LSTMCell(Cell):
             print("dot:",dot)
             print("dxo:",dxo)
 
+            print("dhx:",dhx)
             print("xcomp:",xcomp)
             print("self.dxt:",self.dxt)
             print("dhtf(recurr(int(after))):",self.dh_next)
+            print("dh_next_recurr:",dh_next_recurr)
             print("dc_next(recurr(int(after))):",self.dC_next)
             print("-----------------------------------------------------------------")
         return np.copy(dh_next_recurr)
+        #return np.copy(self.dh_next)
 
     def get_Xgradients(self):
         if(self.Xfacing and self.gen_X_Ds):

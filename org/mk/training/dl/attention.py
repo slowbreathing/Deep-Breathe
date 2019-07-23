@@ -373,9 +373,9 @@ def compute_gradient(attentionlayer):
         #print("damvalues1:",damvalues,damvalues.shape)#," attention_mechanism.memory_layer_dense.dense_kernel:",attention_mechanism.memory_layer_dense.dense_kernel)
 
         dhtf_fw =dht.T+np.squeeze(dquery,axis=1).T
-        if dh_nextmlco is None:
-            dh_nextmlco = np.zeros_like(dhtf_fw)
-        dh_nextmlco=fw_cell.compute_gradients(dhtf_fw,dh_nextmlco,seqnum)
+        #if dh_nextmlco is None:
+            #dh_nextmlco = np.zeros_like(dhtf_fw)
+        dh_nextmlco=fw_cell.compute_gradients(dhtf_fw,seqnum)
         xgrads=fw_cell.get_Xgradients()
 
         xgrada=xgrads[seqnum::seq,:]
