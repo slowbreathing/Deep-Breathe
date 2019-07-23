@@ -61,8 +61,9 @@ class Cell(object):
 
 class MultiRNNCell(Cell):
     # initialise the Recurrent Neural Network
-    def __init__(self,cells,state=None):
-        super().__init__(cells[0].hidden_size,cells[0].debug,cells[0].backpassdebug)
+    def __init__(self,cells,state=None,debug=False,backpassdebug=False):
+        #super().__init__(cells[0].hidden_size,cells[0].debug,cells[0].backpassdebug)
+        super().__init__(cells[0].hidden_size,debug,backpassdebug)
         self.feedforwardcells=cells
         self.feedforwarddepth =len(cells)
         self.seqsize = 0
@@ -131,6 +132,8 @@ class MultiRNNCell(Cell):
 
         for ffi in range(self.feedforwarddepth):
             cell=self.feedforwardcells[ffi]
+            if self.debug:
+                print("MultiRNNCell:Layer:",ffi," input:",X)
             if state is not None:
 
                 output,returnstate =cell(X,state[ffi])
@@ -150,11 +153,14 @@ class MultiRNNCell(Cell):
         for tc in reversed(range(self.feedforwarddepth)):
 
             cell = self.feedforwardcells[tc]
-            print("cell.dh_next:",cell.dh_next)
+            #print("cell.dh_next:",cell.dh_next)
             cell.dh_next+=dh_nextmlco
-            print("cell.dh_next(after):",cell.dh_next)
+            #print("cell.dh_next(after):",cell.dh_next)
             dh_nextmlco=cell.compute_gradients(dhtf, t)
-            print("dh_nextmlco:",dh_nextmlco)
+            if self.backpassdebug:
+                print("MultiRNNCell:Gradient:",dh_nextmlco, " from Layer:",tc," tolayer:",tc-1)
+
+            #print("dh_nextmlco:",dh_nextmlco)
             dhtf = np.zeros_like(dhtf)
 
     def get_Xgradients(self):
